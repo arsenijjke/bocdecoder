@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>TON Treasury Tools</title>
+</head>
+<body>
+  <h1>TON Treasury Viewer + BOC Decoder</h1>
+
+  <!-- Section 1: Treasury contract address -->
+  <h3>Fetch from Smart Contract</h3>
+  <input type="text" id="addressInput" placeholder="Enter treasury address" size="60" />
+  <button id="getStateBtn">Get Treasury State</button>
+  <div id="viewerLink" style="margin-top: 10px;"></div>
+
+  <!-- Section 2: BoC Decoder -->
+  <h3>Decode BOC Manually</h3>
+  <textarea id="bocInput" placeholder="Paste hex BOC here" rows="6" cols="80"></textarea><br />
+  <button id="decodeBtn">Decode</button>
+
+  <!-- Results -->
+  <h3>Decoded Result</h3>
+  <div id="result"></div>
+
+  <script type="module">
+    import { Cell, Address } from 'https://esm.sh/@ton/core@0.58.1';
+    import { Buffer } from 'https://esm.sh/buffer';
+
+    const BASE_URL = 'https://toncenter.com/api/v2';
+
+    async function getFullTreasuryState(address) {
+      const url = `${BASE_URL}/runGetMethod`;
+      const params = {
+        address: address,
+        method: 'getFullTreasuryState',
+        stack: [],
+      };
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params)
+      });
+
+      if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
+
+      const result = await response.json();
+      if (!result.ok) throw new Error(`TON Error: ${result.error?.message || 'Unknown error'}`);
+
+      return result.result.stack;
+    }
+
+    function parseBoc(buffer) {
+      const root = Cell.fromBoc(buffer)[0];
+      const slice = root.beginParse();
+
+      const totalShares = slice.loadUintBig(32);
+      const totalPendingJettons = slice.loadUintBig(32);
+
+      const investorListCell = slice.loadRef();
+      const investorSlice = investorListCell.beginParse();
+
+      let investors = [];
+      while (investorSlice.remainingBits > 0) {
+        try {
+          const addr = investorSlice.loadAddress();
+          const share = investorSlice.loadUint(32);
+          const pendingJetton = investorSlice.loadUint(32);
+          investors.push({ addr, share, pendingJetton });
+        } catch (e) {
+          break;
+        }
+      }
+
+      let html = `<p><strong>Total Shares:</strong> ${totalShares.toString()}</p>`;
+      html += `<p><strong>Total Pending Jettons:</strong> ${totalPendingJettons.toString()}</p>`;
+      html += `<p><strong>Investor Count:</strong> ${investors.length}</p>`;
+
+      if (investors.length > 0) {
+        html += '<table border="1" cellspacing="0" cellpadding="4"><tr><th>Address</th><th>Share</th><th>Pending Jetton</th></tr>';
+        for (const investor of investors) {
+          html += `<tr><td>${investor.addr.toString()}</td><td>${investor.share}</td><td>${investor.pendingJetton}</td></tr>`;
+        }
+        html += '</table>';
+      }
+
+      return html;
+    }
+
+    function updateTonViewerLink(address) {
+      const viewerUrl = `https://tonviewer.com/${address}/`;
+      document.getElementById('viewerLink').innerHTML =
+        `<a href="${viewerUrl}" target="_blank">🔗 View Holders in TonViewer</a>`;
+    }
+
+    // Button: get state from address
+    document.getElementById('getStateBtn').onclick = async () => {
+      const address = document.getElementById('addressInput').value.trim();
+      const result = document.getElementById('result');
+      result.textContent = 'Fetching...';
+
+      updateTonViewerLink(address);
+
+      try {
+        const stack = await getFullTreasuryState(address);
+        const [, [, bocBase64]] = stack;
+        const buffer = Buffer.from(bocBase64.bytes, 'base64');
+        result.innerHTML = parseBoc(buffer);
+      } catch (e) {
+        result.textContent = 'Error: ' + e.message;
+      }
+    };
+
+    // Button: manual decode from input
+    document.getElementById('decodeBtn').onclick = () => {
+      const hex = document.getElementById('bocInput').value.trim();
+      const result = document.getElementById('result');
+
+      try {
+        const buffer = Buffer.from(hex, 'hex');
+        result.innerHTML = parseBoc(buffer);
+      } catch (e) {
+        result.textContent = 'Error parsing BOC: ' + e.message;
+      }
+    };
+  </script>
+</body>
+</html>
