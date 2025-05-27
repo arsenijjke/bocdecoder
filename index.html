@@ -8,47 +8,22 @@
   <h1>TON Treasury Viewer + BOC Decoder</h1>
 
   <!-- Section 1: Treasury contract address -->
-  <h3>Fetch from Smart Contract</h3>
+  <h3>View Treasury Contract</h3>
   <input type="text" id="addressInput" placeholder="Enter treasury address" size="60" />
-  <button id="getStateBtn">Get Treasury State</button>
-  <div id="viewerLink" style="margin-top: 10px;"></div>
+  <button id="viewAddressBtn">View in TonViewer</button>
 
   <!-- Section 2: BoC Decoder -->
   <h3>Decode BOC Manually</h3>
   <textarea id="bocInput" placeholder="Paste hex BOC here" rows="6" cols="80"></textarea><br />
   <button id="decodeBtn">Decode</button>
 
-  <!-- Results -->
-  <h3>Decoded Result</h3>
-  <div id="result"></div>
+  <!-- All results go here -->
+  <h3>Results</h3>
+  <div id="resultsContainer"></div>
 
   <script type="module">
     import { Cell, Address } from 'https://esm.sh/@ton/core@0.58.1';
     import { Buffer } from 'https://esm.sh/buffer';
-
-    const BASE_URL = 'https://toncenter.com/api/v2';
-
-    async function getFullTreasuryState(address) {
-      const url = `${BASE_URL}/runGetMethod`;
-      const params = {
-        address: address,
-        method: 'getFullTreasuryState',
-        stack: [],
-      };
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(params)
-      });
-
-      if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
-
-      const result = await response.json();
-      if (!result.ok) throw new Error(`TON Error: ${result.error?.message || 'Unknown error'}`);
-
-      return result.result.stack;
-    }
 
     function parseBoc(buffer) {
       const root = Cell.fromBoc(buffer)[0];
@@ -87,40 +62,70 @@
       return html;
     }
 
-    function updateTonViewerLink(address) {
-      const viewerUrl = `https://testnet.tonviewer.com/${address}?section=holders`;
-      document.getElementById('viewerLink').innerHTML =
-        `<a href="${viewerUrl}" target="_blank">🔗 View Holders in TonViewer</a>`;
+    function createResultBlock(title, viewerLink, htmlContent) {
+      const container = document.createElement('div');
+      container.style.border = '1px solid #ccc';
+      container.style.padding = '10px';
+      container.style.margin = '15px 0';
+      container.style.backgroundColor = '#f9f9f9';
+
+      const heading = document.createElement('h4');
+      heading.textContent = title;
+
+      const viewer = document.createElement('div');
+      viewer.innerHTML = viewerLink;
+
+      const content = document.createElement('div');
+      content.innerHTML = htmlContent;
+
+      container.appendChild(heading);
+      container.appendChild(viewer);
+      container.appendChild(content);
+
+      document.getElementById('resultsContainer').appendChild(container);
     }
 
-    // Button: get state from address
-    document.getElementById('getStateBtn').onclick = async () => {
+    // Button: View address and fetch holders
+    document.getElementById('viewAddressBtn').onclick = async () => {
       const address = document.getElementById('addressInput').value.trim();
-      const result = document.getElementById('result');
-      result.textContent = 'Fetching...';
+      if (!address) return;
 
-      updateTonViewerLink(address);
+      const viewerUrl = `https://testnet.tonviewer.com/${address}?section=holders`;
+      const viewerLink = `<a href="${viewerUrl}" target="_blank">🔗 View Holders in TonViewer</a>`;
 
       try {
-        const stack = await getFullTreasuryState(address);
-        const [, [, bocBase64]] = stack;
-        const buffer = Buffer.from(bocBase64.bytes, 'base64');
-        result.innerHTML = parseBoc(buffer);
+        const response = await fetch(`https://testnet.tonapi.io/v1/jettons/${address}/holders`);
+        if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
+        const data = await response.json();
+
+        let htmlContent = `<p><strong>Total Holders:</strong> ${data.total}</p>`;
+        if (data.holders && data.holders.length > 0) {
+          htmlContent += '<table border="1" cellspacing="0" cellpadding="4"><tr><th>Address</th><th>Balance</th></tr>';
+          data.holders.forEach(holder => {
+            htmlContent += `<tr><td>${holder.address}</td><td>${holder.balance}</td></tr>`;
+          });
+          htmlContent += '</table>';
+        } else {
+          htmlContent += '<p>No holders found.</p>';
+        }
+
+        createResultBlock(`Holders for: ${address}`, viewerLink, htmlContent);
       } catch (e) {
-        result.textContent = 'Error: ' + e.message;
+        createResultBlock(`Holders for: ${address}`, viewerLink, `<p style="color:red;">Error: ${e.message}</p>`);
       }
     };
 
-    // Button: manual decode from input
+    // Button: manual decode
     document.getElementById('decodeBtn').onclick = () => {
       const hex = document.getElementById('bocInput').value.trim();
-      const result = document.getElementById('result');
+      if (!hex) return;
 
       try {
         const buffer = Buffer.from(hex, 'hex');
-        result.innerHTML = parseBoc(buffer);
+        const htmlContent = parseBoc(buffer);
+        createResultBlock('Manual BOC Decode', '', htmlContent);
       } catch (e) {
-        result.textContent = 'Error parsing BOC: ' + e.message;
+        createResultBlock('Manual BOC Decode', '', `<p style="color:red;">Error parsing BOC: ${e.message}</p>`);
       }
     };
   </script>
