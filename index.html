@@ -3,6 +3,33 @@
 <head>
   <meta charset="utf-8" />
   <title>TON Treasury Tools</title>
+  <style>
+    .result-block {
+      border: 1px solid #ccc;
+      padding: 10px;
+      margin: 15px 0;
+      background-color: #f9f9f9;
+    }
+    .result-header {
+      cursor: pointer;
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+    .result-content {
+      display: none;
+      margin-top: 10px;
+    }
+    .result-block.open .result-content {
+      display: block;
+    }
+    #statusBalance {
+      margin: 10px 0;
+      font-weight: bold;
+    }
+    #statusBalance.error {
+      color: red;
+    }
+  </style>
 </head>
 <body>
   <h1>TON Treasury Viewer + BOC Decoder</h1>
@@ -11,6 +38,8 @@
   <h3>View Treasury Contract</h3>
   <input type="text" id="addressInput" placeholder="Enter treasury address" size="60" />
   <button id="viewAddressBtn">View in TonViewer</button>
+  <button id="checkStatusBtn">Check Contract Status & Balance</button>
+  <div id="statusBalance"></div>
 
   <!-- Section 2: BoC Decoder -->
   <h3>Decode BOC Manually</h3>
@@ -22,100 +51,131 @@
   <div id="resultsContainer"></div>
 
   <script type="module">
-    import { Cell, Address } from 'https://esm.sh/@ton/core@0.58.1';
+    import { Cell } from 'https://esm.sh/@ton/core@0.58.1';
     import { Buffer } from 'https://esm.sh/buffer';
 
-    function parseBoc(buffer) {
-      const root = Cell.fromBoc(buffer)[0];
-      const slice = root.beginParse();
-
-      const totalShares = slice.loadUintBig(32);
-      const totalPendingJettons = slice.loadUintBig(32);
-
-      const investorListCell = slice.loadRef();
-      const investorSlice = investorListCell.beginParse();
-
-      let investors = [];
-      while (investorSlice.remainingBits > 0) {
-        try {
-          const addr = investorSlice.loadAddress();
-          const share = investorSlice.loadUint(32);
-          const pendingJetton = investorSlice.loadUint(32);
-          investors.push({ addr, share, pendingJetton });
-        } catch (e) {
-          break;
+    // REST API запрос статуса и баланса через TonCenter
+    async function getAccountInfoREST(address) {
+      const url = `https://testnet.toncenter.com/api/v2/getAddressInformation?address=${address}`;
+      try {
+        const response = await fetch(url);
+        const data = await response.json();
+        if (!data.ok) {
+          return { status: 'Error: ' + (data.error?.message || 'Unknown error'), balance: null };
         }
-      }
+        const acc = data.result;
+        let statusText = 'Unknown';
 
-      let html = `<p><strong>Total Shares:</strong> ${totalShares.toString()}</p>`;
-      html += `<p><strong>Total Pending Jettons:</strong> ${totalPendingJettons.toString()}</p>`;
-      html += `<p><strong>Investor Count:</strong> ${investors.length}</p>`;
-
-      if (investors.length > 0) {
-        html += '<table border="1" cellspacing="0" cellpadding="4"><tr><th>Address</th><th>Share</th><th>Pending Jetton</th></tr>';
-        for (const investor of investors) {
-          html += `<tr><td>${investor.addr.toString()}</td><td>${investor.share}</td><td>${investor.pendingJetton}</td></tr>`;
+        switch (acc.state) {
+          case 'active': statusText = 'Account active'; break;
+          case 'uninitialized': statusText = 'Account inactive'; break;
+          case 'frozen': statusText = 'Account frozen'; break;
+          default: statusText = acc.state; break;
         }
-        html += '</table>';
-      }
 
-      return html;
+        const balanceTON = Number(acc.balance) / 1e9;
+        return { status: statusText, balance: balanceTON };
+      } catch (e) {
+        return { status: 'Error: ' + e.message, balance: null };
+      }
     }
 
-    function createResultBlock(title, viewerLink, htmlContent) {
+    function parseBoc(buffer) {
+  const root = Cell.fromBoc(buffer)[0];
+  const slice = root.beginParse();
+
+  const totalShares = slice.loadUintBig(32);
+  const totalPendingJettons = slice.loadUintBig(32);
+
+  const investorListCell = slice.loadRef();
+  const investorSlice = investorListCell.beginParse();
+
+  let investors = [];
+  let totalHeldShares = 0n;
+
+  while (investorSlice.remainingBits > 0) {
+    try {
+      const addr = investorSlice.loadAddress();
+      const share = BigInt(investorSlice.loadUint(32));
+      const pendingJetton = investorSlice.loadUint(32);
+      investors.push({ addr, share, pendingJetton });
+      totalHeldShares += share;
+    } catch (e) {
+      break;
+    }
+  }
+
+  let html = `<p><strong>Total Shares (All Tokens):</strong> ${totalShares.toString()}</p>`;
+  html += `<p><strong>Total Pending Jettons:</strong> ${totalPendingJettons.toString()}</p>`;
+  html += `<p><strong>Total Held by Investors:</strong> ${totalHeldShares.toString()}</p>`;
+  html += `<p><strong>Investor Count:</strong> ${investors.length}</p>`;
+
+  if (investors.length > 0) {
+    html += '<table border="1" cellspacing="0" cellpadding="4"><tr><th>Address</th><th>Share</th><th>Pending Jetton</th><th>Percent of Total</th></tr>';
+    for (const investor of investors) {
+      const percent = totalShares > 0n
+        ? (Number(investor.share * 10000n / totalShares) / 100).toFixed(2)
+        : '0.00';
+      html += `<tr>
+        <td>${investor.addr.toString()}</td>
+        <td>${investor.share.toString()}</td>
+        <td>${investor.pendingJetton}</td>
+        <td>${percent}%</td>
+      </tr>`;
+    }
+    html += '</table>';
+  }
+
+  return html;
+}
+
+    function createCollapsibleResult(title, htmlContent) {
       const container = document.createElement('div');
-      container.style.border = '1px solid #ccc';
-      container.style.padding = '10px';
-      container.style.margin = '15px 0';
-      container.style.backgroundColor = '#f9f9f9';
+      container.className = 'result-block';
 
-      const heading = document.createElement('h4');
-      heading.textContent = title;
-
-      const viewer = document.createElement('div');
-      viewer.innerHTML = viewerLink;
+      const header = document.createElement('div');
+      header.className = 'result-header';
+      header.textContent = title;
+      header.onclick = () => container.classList.toggle('open');
 
       const content = document.createElement('div');
+      content.className = 'result-content';
       content.innerHTML = htmlContent;
 
-      container.appendChild(heading);
-      container.appendChild(viewer);
+      container.appendChild(header);
       container.appendChild(content);
 
       document.getElementById('resultsContainer').appendChild(container);
     }
 
-    // Button: View address and fetch holders
-    document.getElementById('viewAddressBtn').onclick = async () => {
+    document.getElementById('viewAddressBtn').onclick = () => {
       const address = document.getElementById('addressInput').value.trim();
       if (!address) return;
+      const viewerUrl = `https://testnet.tonviewer.com/${address}`;
+      window.open(viewerUrl, '_blank');
+    };
 
-      const viewerUrl = `https://testnet.tonviewer.com/${address}?section=holders`;
-      const viewerLink = `<a href="${viewerUrl}" target="_blank">🔗 View Holders in TonViewer</a>`;
+    document.getElementById('checkStatusBtn').onclick = async () => {
+      const address = document.getElementById('addressInput').value.trim();
+      const statusDiv = document.getElementById('statusBalance');
+      statusDiv.textContent = 'Загрузка...';
+      statusDiv.classList.remove('error');
 
-      try {
-        const response = await fetch(`https://testnet.tonapi.io/v1/jettons/${address}/holders`);
-        if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
-        const data = await response.json();
+      if (!address) {
+        statusDiv.textContent = 'Введите адрес контракта';
+        statusDiv.classList.add('error');
+        return;
+      }
 
-        let htmlContent = `<p><strong>Total Holders:</strong> ${data.total}</p>`;
-        if (data.holders && data.holders.length > 0) {
-          htmlContent += '<table border="1" cellspacing="0" cellpadding="4"><tr><th>Address</th><th>Balance</th></tr>';
-          data.holders.forEach(holder => {
-            htmlContent += `<tr><td>${holder.address}</td><td>${holder.balance}</td></tr>`;
-          });
-          htmlContent += '</table>';
-        } else {
-          htmlContent += '<p>No holders found.</p>';
-        }
-
-        createResultBlock(`Holders for: ${address}`, viewerLink, htmlContent);
-      } catch (e) {
-        createResultBlock(`Holders for: ${address}`, viewerLink, `<p style="color:red;">Error: ${e.message}</p>`);
+      const info = await getAccountInfoREST(address);
+      if (info.balance === null) {
+        statusDiv.textContent = `Ошибка: ${info.status}`;
+        statusDiv.classList.add('error');
+      } else {
+        statusDiv.textContent = `Статус: ${info.status} | Баланс: ${info.balance} TON`;
       }
     };
 
-    // Button: manual decode
     document.getElementById('decodeBtn').onclick = () => {
       const hex = document.getElementById('bocInput').value.trim();
       if (!hex) return;
@@ -123,9 +183,9 @@
       try {
         const buffer = Buffer.from(hex, 'hex');
         const htmlContent = parseBoc(buffer);
-        createResultBlock('Manual BOC Decode', '', htmlContent);
+        createCollapsibleResult('Manual BOC Decode', htmlContent);
       } catch (e) {
-        createResultBlock('Manual BOC Decode', '', `<p style="color:red;">Error parsing BOC: ${e.message}</p>`);
+        createCollapsibleResult('Manual BOC Decode', `<p style="color:red;">Error parsing BOC: ${e.message}</p>`);
       }
     };
   </script>
