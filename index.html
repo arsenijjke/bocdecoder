@@ -1,133 +1,171 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>TON Treasury Tools</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TON Treasury Viewer + BOC Decoder</title>
   <style>
-    .result-block {
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    h1, h3 {
+      color: #2c3e50;
+    }
+
+    input[type="text"], textarea {
+      padding: 8px;
+      margin: 5px 0;
+      width: 100%;
+      max-width: 600px;
+      font-size: 1em;
+    }
+
+    button {
+      padding: 10px 15px;
+      margin: 5px 5px 15px 0;
+      font-size: 1em;
+      cursor: pointer;
+    }
+
+    #tonTreasuryTool .result-block {
       border: 1px solid #ccc;
       padding: 10px;
       margin: 15px 0;
-      background-color: #f9f9f9;
+      background-color: #fff;
+      border-radius: 5px;
     }
-    .result-header {
+
+    #tonTreasuryTool .result-header {
       cursor: pointer;
       font-weight: bold;
       margin-bottom: 5px;
     }
-    .result-content {
+
+    #tonTreasuryTool .result-content {
       display: none;
       margin-top: 10px;
+      white-space: pre-wrap;
+      font-family: monospace;
     }
-    .result-block.open .result-content {
+
+    #tonTreasuryTool .result-block.open .result-content {
       display: block;
     }
+
     #statusBalance {
       margin: 10px 0;
       font-weight: bold;
     }
+
     #statusBalance.error {
       color: red;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+
+    table th, table td {
+      padding: 8px;
+      border: 1px solid #ccc;
+      text-align: left;
+    }
+
+    textarea {
+      font-family: monospace;
     }
   </style>
 </head>
 <body>
-  <h1>TON Treasury Viewer + BOC Decoder</h1>
 
-  <!-- Section 1: Treasury contract address -->
-  <h3>View Treasury Contract</h3>
-  <input type="text" id="addressInput" placeholder="Enter treasury address" size="60" />
-  <button id="viewAddressBtn">View in TonViewer</button>
-  <button id="checkStatusBtn">Check Contract Status & Balance</button>
-  <div id="statusBalance"></div>
+  <section id="tonTreasuryTool">
+    <h1>TON Treasury Viewer + BOC Decoder</h1>
 
-  <!-- Section 2: BoC Decoder -->
-  <h3>Decode BOC Manually</h3>
-  <textarea id="bocInput" placeholder="Paste hex BOC here" rows="6" cols="80"></textarea><br />
-  <button id="decodeBtn">Decode</button>
+    <h3>View Treasury Contract</h3>
+    <input type="text" id="addressInput" placeholder="Enter treasury address" />
+    <button id="viewAddressBtn">View in TonViewer</button>
+    <button id="checkStatusBtn">Check Contract Status & Balance</button>
+    <button id="autoDecodeBtn">Auto Decode Treasury State</button>
+    <div id="statusBalance"></div>
 
-  <!-- All results go here -->
-  <h3>Results</h3>
-  <div id="resultsContainer"></div>
+    <h3>Decode BOC Manually</h3>
+    <textarea id="bocInput" placeholder="Paste hex BOC here" rows="6"></textarea><br />
+    <button id="decodeBtn">Decode</button>
+
+    <h3>Results</h3>
+    <div id="resultsContainer"></div>
+  </section>
 
   <script type="module">
     import { Cell } from 'https://esm.sh/@ton/core@0.58.1';
     import { Buffer } from 'https://esm.sh/buffer';
 
-    // REST API запрос статуса и баланса через TonCenter
     async function getAccountInfoREST(address) {
       const url = `https://testnet.toncenter.com/api/v2/getAddressInformation?address=${address}`;
       try {
         const response = await fetch(url);
         const data = await response.json();
-        if (!data.ok) {
-          return { status: 'Error: ' + (data.error?.message || 'Unknown error'), balance: null };
-        }
+        if (!data.ok) return { status: 'Error: ' + (data.error?.message || 'Unknown error'), balance: null };
         const acc = data.result;
-        let statusText = 'Unknown';
-
-        switch (acc.state) {
-          case 'active': statusText = 'Account active'; break;
-          case 'uninitialized': statusText = 'Account inactive'; break;
-          case 'frozen': statusText = 'Account frozen'; break;
-          default: statusText = acc.state; break;
-        }
-
         const balanceTON = Number(acc.balance) / 1e9;
+        let statusText = acc.state === 'active' ? 'Account active' : acc.state === 'uninitialized' ? 'Account inactive' : acc.state === 'frozen' ? 'Account frozen' : acc.state;
         return { status: statusText, balance: balanceTON };
       } catch (e) {
         return { status: 'Error: ' + e.message, balance: null };
       }
     }
+    async function getAccountDataBoc(address) {
+  const url = "https://your-vercel-project.vercel.app/api/runGetMethod"; // ⬅️ Use your actual deployed Vercel URL
 
-    function parseBoc(buffer) {
-  const root = Cell.fromBoc(buffer)[0];
-  const slice = root.beginParse();
+  const requestBody = {
+    address: address,
+    method: "getFullTreasuryState",
+    stack: []
+  };
 
-  const totalShares = slice.loadUintBig(32);
-  const totalPendingJettons = slice.loadUintBig(32);
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(requestBody)
+    });
 
-  const investorListCell = slice.loadRef();
-  const investorSlice = investorListCell.beginParse();
+    const json = await response.json();
+    console.log("Full response:", json);
 
-  let investors = [];
-  let totalHeldShares = 0n;
-
-  while (investorSlice.remainingBits > 0) {
-    try {
-      const addr = investorSlice.loadAddress();
-      const share = BigInt(investorSlice.loadUint(32));
-      const pendingJetton = investorSlice.loadUint(32);
-      investors.push({ addr, share, pendingJetton });
-      totalHeldShares += share;
-    } catch (e) {
-      break;
+    if (!response.ok || !json.ok) {
+      throw new Error(`API Error: ${json.error || "Unknown error"}`);
     }
-  }
 
-  let html = `<p><strong>Total Shares (All Tokens):</strong> ${totalShares.toString()}</p>`;
-  html += `<p><strong>Total Pending Jettons:</strong> ${totalPendingJettons.toString()}</p>`;
-  html += `<p><strong>Total Held by Investors:</strong> ${totalHeldShares.toString()}</p>`;
-  html += `<p><strong>Investor Count:</strong> ${investors.length}</p>`;
-
-  if (investors.length > 0) {
-    html += '<table border="1" cellspacing="0" cellpadding="4"><tr><th>Address</th><th>Share</th><th>Pending Jetton</th><th>Percent of Total</th></tr>';
-    for (const investor of investors) {
-      const percent = totalShares > 0n
-        ? (Number(investor.share * 10000n / totalShares) / 100).toFixed(2)
-        : '0.00';
-      html += `<tr>
-        <td>${investor.addr.toString()}</td>
-        <td>${investor.share.toString()}</td>
-        <td>${investor.pendingJetton}</td>
-        <td>${percent}%</td>
-      </tr>`;
+    const stack = json.result.stack;
+    if (!Array.isArray(stack) || stack.length === 0) {
+      throw new Error("Stack is empty or malformed.");
     }
-    html += '</table>';
-  }
 
-  return html;
+    const cellEntry = stack.find(([type]) => type === "cell");
+
+    if (!cellEntry || !cellEntry[1]?.bytes) {
+      throw new Error("No cell with bytes found in stack.");
+    }
+
+    const cellBytes = cellEntry[1].bytes;
+    console.log("Cell bytes:", cellBytes);
+
+    return cellBytes;
+
+  } catch (error) {
+    console.error("Failed to fetch cell bytes:", error);
+  }
 }
+
 
     function createCollapsibleResult(title, htmlContent) {
       const container = document.createElement('div');
@@ -144,7 +182,6 @@
 
       container.appendChild(header);
       container.appendChild(content);
-
       document.getElementById('resultsContainer').appendChild(container);
     }
 
@@ -158,34 +195,48 @@
     document.getElementById('checkStatusBtn').onclick = async () => {
       const address = document.getElementById('addressInput').value.trim();
       const statusDiv = document.getElementById('statusBalance');
-      statusDiv.textContent = 'Загрузка...';
+      statusDiv.textContent = 'Loading...';
       statusDiv.classList.remove('error');
-
       if (!address) {
-        statusDiv.textContent = 'Введите адрес контракта';
+        statusDiv.textContent = 'Please enter a contract address';
         statusDiv.classList.add('error');
         return;
       }
-
       const info = await getAccountInfoREST(address);
       if (info.balance === null) {
-        statusDiv.textContent = `Ошибка: ${info.status}`;
+        statusDiv.textContent = `Error: ${info.status}`;
         statusDiv.classList.add('error');
       } else {
-        statusDiv.textContent = `Статус: ${info.status} | Баланс: ${info.balance} TON`;
+        statusDiv.textContent = `Status: ${info.status} | Balance: ${info.balance} TON`;
       }
     };
 
     document.getElementById('decodeBtn').onclick = () => {
       const hex = document.getElementById('bocInput').value.trim();
       if (!hex) return;
-
       try {
         const buffer = Buffer.from(hex, 'hex');
         const htmlContent = parseBoc(buffer);
         createCollapsibleResult('Manual BOC Decode', htmlContent);
       } catch (e) {
         createCollapsibleResult('Manual BOC Decode', `<p style="color:red;">Error parsing BOC: ${e.message}</p>`);
+      }
+    };
+
+    document.getElementById('autoDecodeBtn').onclick = async () => {
+      const address = document.getElementById('addressInput').value.trim();
+      if (!address) {
+        createCollapsibleResult('Auto Decode Treasury State', `<p style="color:red;">Please enter a contract address</p>`);
+        return;
+      }
+      try {
+        const bocBase64 = await getAccountDataBoc(address);
+        createCollapsibleResult('Raw BOC (base64) from Account State', `<textarea rows="6" style="width:100%;">${bocBase64}</textarea>`);
+        const buffer = Buffer.from(bocBase64, 'base64');
+        const htmlContent = parseBoc(buffer);
+        createCollapsibleResult('Parsed Treasury State', htmlContent);
+      } catch (e) {
+        createCollapsibleResult('Auto Decode Treasury State', `<p style="color:red;">Error: ${e.message}</p>`);
       }
     };
   </script>
