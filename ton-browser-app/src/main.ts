@@ -91,7 +91,7 @@ function parseBoc(
       investorCount !== undefined
     ) {
       return `
-        <div style="font-size: 0.9em; margin-bottom: 10px;">
+        <div style="font-size: 0.9em; margin-bottom: 5px;">
           <p><strong>Total Shares:</strong> ${totalShares.toString()}</p>
           <p><strong>Total Pending Jettons:</strong> ${totalPendingJettons.toString()}</p>
           <p><strong>Investor Count:</strong> ${investorCount.toString()}</p>
@@ -116,33 +116,28 @@ function parseBoc(
     const root = cells[0];
     const slice = root.beginParse();
 
-    slice.loadUint(64); // Skip header or version
-    slice.loadUint(64); // Skip another value
-    slice.loadUint(64);
-
     type Investor = {
       addr: any;
-      share: number;
-      pendingJettons: number;
+      share: bigint;
+      pendingJettons: bigint;
     };
 
     const investors: Investor[] = [];
-    let totalShare = 0;
-    let totalPending = 0;
+    let totalShare = 0n;
+    let totalPending = 0n;
 
-    while (slice.remainingRefs > 0) {
+    while (slice.remainingBits > 0) {
       try {
-        const ref = slice.loadRef();
-        const investorSlice = ref.beginParse();
-        const addr = investorSlice.loadAddress();
-        const share = investorSlice.loadInt(257);
-        const pendingJettons = investorSlice.loadInt(257);
+        const addr = slice.loadAddress();
+        const share = slice.loadIntBig(64); // Use consistent bit size
+        const pendingJettons = slice.loadIntBig(64);
 
         investors.push({ addr, share, pendingJettons });
 
         totalShare += share;
         totalPending += pendingJettons;
       } catch (e) {
+        console.error("Error while parsing investor entry:", e);
         break;
       }
     }
@@ -155,16 +150,16 @@ function parseBoc(
       for (const { addr, share, pendingJettons } of investors) {
         html += `<tr>
           <td>${addr.toString()}</td>
-          <td>${share}</td>
-          <td>${pendingJettons}</td>
+          <td>${share.toString()}</td>
+          <td>${pendingJettons.toString()}</td>
         </tr>`;
       }
 
       // Add total row
       html += `<tr style="font-weight: bold;">
-        <td>Total</td>
-        <td>${totalShare}</td>
-        <td>${totalPending}</td>
+        <td>Total (calculated)</td>
+        <td>${totalShare.toString()}</td>
+        <td>${totalPending.toString()}</td>
       </tr>`;
 
       html += "</table>";
@@ -174,25 +169,17 @@ function parseBoc(
 
     return html;
   } catch (e) {
+    console.error("Failed to parse BOC:", e);
     return `
       ${formatTotals()}
-      <p style="color:red;">Investor List is empty.</p>
+      <p style="color:red;">Investor List is empty or invalid.</p>
     `;
   }
 }
 
 function parseBoc2(buffer: Buffer) {
   const root = Cell.fromBoc(buffer)[0];
-  const slice = root.beginParse();
-
-  // Read 3 x int64 from header
-  const totalShares = slice.loadIntBig(64);
-  const totalPendingJettons = slice.loadIntBig(64);
-  const investorCount = slice.loadIntBig(64);
-  
-  console.log(totalShares + totalPendingJettons + investorCount);
-  // Read investor list from ref
-  const investorListSlice = slice.loadRef().beginParse();
+  const investorListSlice = root.beginParse(); // No loadRef()
 
   const investors = [];
   let totalSharesCalc = 0n;
@@ -201,8 +188,8 @@ function parseBoc2(buffer: Buffer) {
   while (investorListSlice.remainingBits > 0) {
     try {
       const addr = investorListSlice.loadAddress();
-      const share = investorListSlice.loadIntBig(32);
-      const pendingJettons = investorListSlice.loadIntBig(32);
+      const share = investorListSlice.loadIntBig(64);
+      const pendingJettons = investorListSlice.loadIntBig(64);
 
       investors.push({ addr, share, pendingJettons });
 
