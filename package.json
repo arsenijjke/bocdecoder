@@ -1,0 +1,21 @@
+{
+  "homepage": "https://github.com/arsenijjke/bocdecoder",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "name": "ton-browser-app",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "devDependencies": {
+    "gh-pages": "^6.3.0",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5"
+  },
+  "dependencies": {
+    "@ton/ton": "^15.2.1",
+    "buffer": "^6.0.3"
+  }
+}

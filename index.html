@@ -1,0 +1,125 @@
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TON Treasury Viewer + BOC Decoder</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    h1, h3 {
+      color: #2c3e50;
+    }
+
+    input[type="text"], textarea {
+      padding: 8px;
+      margin: 5px 0;
+      width: 100%;
+      max-width: 600px;
+      font-size: 1em;
+    }
+
+    button {
+      padding: 10px 15px;
+      margin: 5px 5px 15px 0;
+      font-size: 1em;
+      cursor: pointer;
+    }
+
+    #tonTreasuryTool .result-block {
+      border: 1px solid #ccc;
+      padding: 10px;
+      margin: 15px 0;
+      background-color: #fff;
+      border-radius: 5px;
+    }
+
+    #tonTreasuryTool .result-header {
+      cursor: pointer;
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+
+    #tonTreasuryTool .result-content {
+      display: none;
+      margin-top: 10px;
+      white-space: pre-wrap;
+      font-family: monospace;
+    }
+
+    #tonTreasuryTool .result-block.open .result-content {
+      display: block;
+    }
+
+    #statusBalance {
+      margin: 10px 0;
+      font-weight: bold;
+    }
+
+    #statusBalance.error {
+      color: red;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+
+    table th, table td {
+      padding: 8px;
+      border: 1px solid #ccc;
+      text-align: left;
+    }
+
+    textarea {
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+  <section id="tonTreasuryTool">
+    <h1>TON Treasury Viewer + BOC Decoder</h1>
+
+    <h3>View Treasury Contract</h3>
+<div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start;">
+  <div style="flex: 1; min-width: 300px;">
+    <input type="text" id="addressInput" placeholder="Enter treasury address" />
+    
+    <!-- Buttons below the input -->
+    <div style="margin-top: 10px;">
+        <button id="viewAddressBtn">View in TonViewer</button>
+        <button id="checkStatusBtn">Check Contract Status & Balance</button>
+        <button id="autoDecodeBtn">Auto Decode Treasury State</button>
+      </div>
+      <div id="statusBalance"></div>
+    </div>
+
+    <!-- Wallet processor to the right -->
+    <div style="min-width: 280px;">
+      <label for="walletAddressInput"><strong>Process Crypto Wallet Address</strong></label><br />
+      <input type="text" id="walletAddressInput" placeholder="Enter wallet address" style="margin-bottom: 5px;" />
+      <button id="processWalletBtn">Process</button>
+      <div id="walletResult" style="margin-top: 5px;"></div>
+      </div>
+    </div>
+
+    <h3>Decode BOC Manually</h3>
+    <textarea id="bocInput" placeholder="Paste hex BOC here" rows="6"></textarea><br />
+    <button id="decodeBtn">Decode</button>
+
+    <h3>Results</h3>
+    <div id="resultsContainer"></div>
+  </section>
+  </section>
+  <script type="module">
+    import { Buffer } from 'https://esm.sh/buffer';
+    window.Buffer = Buffer;
+  </script>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
