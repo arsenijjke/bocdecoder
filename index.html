@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -79,33 +80,46 @@
     textarea {
       font-family: monospace;
     }
+
+    .hidden {
+      display: none;
+    }
+
+    .center {
+      text-align: center;
+    }
   </style>
   <script type="module" crossorigin src="/bocdecoder/assets/index-ClnkNLFW.js"></script>
 </head>
 <body>
-  <section id="tonTreasuryTool">
+  <button id="goBackBtn">Back to Start Page</button>
+  <section id="startPage" class="center">
+    <h1>Welcome to TON Tools</h1>
+    <p>Click below to open the Treasury Viewer and BOC Decoder.</p>
+    <button id="goToToolBtn">Open Tool</button>
+  </section>
+  <!-- Tool Page -->
+  <section id="tonTreasuryTool" class="hidden">
     <h1>TON Treasury Viewer + BOC Decoder</h1>
 
     <h3>View Treasury Contract</h3>
-<div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start;">
-  <div style="flex: 1; min-width: 300px;">
-    <input type="text" id="addressInput" placeholder="Enter treasury address" />
-    
-    <!-- Buttons below the input -->
-    <div style="margin-top: 10px;">
-        <button id="viewAddressBtn">View in TonViewer</button>
-        <button id="checkStatusBtn">Check Contract Status & Balance</button>
-        <button id="autoDecodeBtn">Auto Decode Treasury State</button>
+    <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start;">
+      <div style="flex: 1; min-width: 300px;">
+        <input type="text" id="addressInput" placeholder="Enter treasury address" />
+        <div style="margin-top: 10px;">
+          <button id="viewAddressBtn">View in TonViewer</button>
+          <button id="checkStatusBtn">Check Contract Status & Balance</button>
+          <button id="autoDecodeBtn">Auto Decode Treasury State</button>
+          <button id="saveAddressBtn">Save Treasury Address</button>
+        </div>
+        <div id="statusBalance"></div>
       </div>
-      <div id="statusBalance"></div>
-    </div>
 
-    <!-- Wallet processor to the right -->
-    <div style="min-width: 280px;">
-      <label for="walletAddressInput"><strong>Process Crypto Wallet Address</strong></label><br />
-      <input type="text" id="walletAddressInput" placeholder="Enter wallet address" style="margin-bottom: 5px;" />
-      <button id="processWalletBtn">Process</button>
-      <div id="walletResult" style="margin-top: 5px;"></div>
+      <div style="min-width: 280px;">
+        <label for="walletAddressInput"><strong>Process Crypto Wallet Address</strong></label><br />
+        <input type="text" id="walletAddressInput" placeholder="Enter wallet address" style="margin-bottom: 5px;" />
+        <button id="processWalletBtn">Process</button>
+        <div id="walletResult" style="margin-top: 5px;"></div>
       </div>
     </div>
 
@@ -116,6 +130,17 @@
     <h3>Results</h3>
     <div id="resultsContainer"></div>
   </section>
-  </section>
+
+  <script type="module">
+    // Simulated "routing"
+    const startPage = document.getElementById('startPage');
+    const toolPage = document.getElementById('tonTreasuryTool');
+    const goToToolBtn = document.getElementById('goToToolBtn');
+
+    goToToolBtn?.addEventListener('click', () => {
+      startPage?.classList.add('hidden');
+      toolPage?.classList.remove('hidden');
+    });
+  </script>
 </body>
 </html>
