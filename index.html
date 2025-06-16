@@ -4,11 +4,33 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Start Page</title>
-  <script type="module" crossorigin src="/bocdecoder/assets/index-CurAJefX.js"></script>
+  <style>
+    #inputContainer {
+      margin-bottom: 1em;
+    }
+    #inputContainer input {
+      width: 300px;
+      padding: 4px;
+    }
+    #inputContainer button {
+      margin-left: 8px;
+    }
+    li {
+      margin: 8px 0;
+    }
+    .address-button {
+      margin-right: 10px;
+    }
+  </style>
+  <script type="module" crossorigin src="/bocdecoder/assets/index-Bl6On13c.js"></script>
   <link rel="modulepreload" crossorigin href="/bocdecoder/assets/modulepreload-polyfill-B5Qt9EMX.js">
 </head>
 <body>
-  <button id="goToToolBtn">Go To Tool</button>
+  <div id="inputContainer">
+    <input id="addressInput" type="text" placeholder="Enter address" />
+    <button id="addAddressBtn">Add</button>
+  </div>
   <ul id="addressList"></ul>
+
 </body>
 </html>
