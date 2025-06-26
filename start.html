@@ -80,7 +80,7 @@
       font-family: monospace;
     }
   </style>
-  <script type="module" crossorigin src="/bocdecoder/assets/start-0mW0X8eP.js"></script>
+  <script type="module" crossorigin src="/bocdecoder/assets/start-McdqCqmq.js"></script>
   <link rel="modulepreload" crossorigin href="/bocdecoder/assets/modulepreload-polyfill-B5Qt9EMX.js">
 </head>
 <body>
@@ -89,36 +89,34 @@
     <h1>TON Treasury Viewer + BOC Decoder</h1>
 
     <h3>View Treasury Contract</h3>
-<div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start;">
-  <div style="flex: 1; min-width: 300px;">
-    <label for="jettonMasterInput">Jetton Master Address:</label>
-    <!-- Buttons below the input -->
-    <div style="margin-top: 10px;">
-        <button id="viewAddressBtn">View in TonViewer</button>
-        <button id="checkStatusBtn">Check Contract Status & Balance</button>
-        <button id="autoDecodeBtn">Auto Decode Treasury State</button>
+    <div style="display: flex; flex-wrap: wrap; gap: 30px; align-items: flex-start;">
+      <!-- LEFT: Address & Buttons -->
+      <div style="flex: 1; min-width: 300px;">
+        <span id="address-display"></span>
+        <div style="margin-top: 10px;">
+          <button id="viewAddressBtn">View in TonViewer</button><br />
+          <button id="checkStatusBtn">Check Contract Status & Balance</button><br />
+          <button id="autoDecodeBtn">Auto Decode Treasury State</button>
+        </div>
+        <div id="statusBalance" style="margin-top: 10px;"></div>
       </div>
-      <div id="statusBalance"></div>
+    
+      <!-- RIGHT: Pie Chart -->
+      <div style="min-width: 320px;">
+        <canvas id="investorPieChart" width="300" height="300"></canvas>
+      </div>
     </div>
-
-    <!-- Wallet processor to the right -->
+    <!-- Wallet processor to the right
     <div style="min-width: 280px;">
       <label for="walletAddressInput"><strong>Process Crypto Wallet Address</strong></label><br />
       <input type="text" id="walletAddressInput" placeholder="Enter wallet address" style="margin-bottom: 5px;" />
       <button id="processWalletBtn">Process</button>
       <div id="walletResult" style="margin-top: 5px;"></div>
-      </div>
+    </div> -->
     </div>
-
-    <h3>Decode BOC Manually</h3>
-    <textarea id="bocInput" placeholder="Paste hex BOC here" rows="6"></textarea><br />
-    <button id="decodeBtn">Decode</button>
-
-    <h3>Results</h3>
     <div id="resultsContainer"></div>
   </section>
   </section>
-  <button id="goBackBtn">Back to Start Page</button>
 <script>
   document.getElementById('goBackBtn').addEventListener('click', () => {
     window.location.href = 'index.html'; // NOT /start.html
