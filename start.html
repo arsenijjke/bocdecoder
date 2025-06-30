@@ -83,49 +83,70 @@
 </head>
 <body>
   <section id="tonTreasuryTool">
-    <button id="goBackBtn">Back to Start Page</button>
-    <h1>TON Treasury Viewer + BOC Decoder</h1>
 
-    <h3>View Treasury Contract</h3>
-<div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start;">
-  <div style="flex: 1; min-width: 300px;">
-    <label for="jettonMasterInput">Jetton Master Address:</label>
-    <!-- Buttons below the input -->
-    <div style="margin-top: 10px;">
-        <button id="viewAddressBtn">View in TonViewer</button>
-        <button id="checkStatusBtn">Check Contract Status & Balance</button>
-        <button id="autoDecodeBtn">Auto Decode Treasury State</button>
+    <!-- HEADER SECTION -->
+    <div style="background: #fff; padding: 15px; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+
+      <!-- Main Treasury Section -->
+      <div style="flex: 1; min-width: 300px;">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+          <label for="treasurySelect" style="white-space: nowrap; font-weight: bold;">Selected Treasury:</label>
+          <select id="treasurySelect" style="flex: 1; padding: 6px 10px; border: 1px solid #ccc; border-radius: 6px; background-color: #fff; font-size: 14px;">
+            <!-- Options populated dynamically -->
+          </select>
+        </div>
+      
+        <div style="margin-top: 10px;">
+          <button id="viewAddressBtn">View in TonViewer</button>
+          <button id="checkStatusBtn">Check Contract Status & Balance</button>
+          <button id="autoDecodeBtn">Auto Decode Treasury State</button>
+        </div>
+      
+        <div id="statusBalance" style="margin-top: 10px;"></div>
       </div>
-      <div id="statusBalance"></div>
+
+      <!-- Wallet Input -->
+      <div style="min-width: 280px; flex: 1;">
+        <label for="walletAddressInput" style="display: block; margin-bottom: 5px;">
+          <strong>Wallet Address:</strong>
+        </label>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <input
+            type="text"
+            id="walletAddressInput"
+            placeholder="Enter wallet address"
+            style="flex: 1;"
+          />
+          <button id="processWalletBtn">Process</button>
+        </div>
+        <div id="walletResult" style="margin-top: 10px;"></div>
+      </div>
+      
+
     </div>
 
-    <!-- Wallet processor to the right -->
-    <div style="min-width: 280px;">
-      <label for="walletAddressInput"><strong>Process Crypto Wallet Address</strong></label><br />
-      <input type="text" id="walletAddressInput" placeholder="Enter wallet address" style="margin-bottom: 5px;" />
-      <button id="processWalletBtn">Process</button>
-      <div id="walletResult" style="margin-top: 5px;"></div>
+    <!-- PIE CHART SECTION -->
+    <div style="display: flex; justify-content: flex-start; margin-bottom: 20px;">
+      <div style="background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+        <canvas id="investorPieChart" width="300" height="300"></canvas>
       </div>
     </div>
 
-    <h3>Decode BOC Manually</h3>
-    <textarea id="bocInput" placeholder="Paste hex BOC here" rows="6"></textarea><br />
-    <button id="decodeBtn">Decode</button>
-
-    <h3>Results</h3>
+    <!-- RESULTS SECTION -->
     <div id="resultsContainer"></div>
+
   </section>
-  </section>
+
+  <!-- Scripts -->
   <script type="module">
     import { Buffer } from 'https://esm.sh/buffer';
     window.Buffer = Buffer;
   </script>
   <script type="module" src="/src/main.ts"></script>
-  <button id="goBackBtn">Back to Start Page</button>
-<script>
-  document.getElementById('goBackBtn').addEventListener('click', () => {
-    window.location.href = 'index.html'; // NOT /start.html
-  });
-</script>
+  <script>
+    document.getElementById('goBackBtn')?.addEventListener('click', () => {
+      window.location.href = 'index.html';
+    });
+  </script>
 </body>
 </html>
