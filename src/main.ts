@@ -1,5 +1,6 @@
 import { TonClient, Cell, Address, Dictionary, Slice } from "@ton/ton";
 import { Chart, PieController, ArcElement, Tooltip, Legend } from 'chart.js';
+import {LineController, LineElement, PointElement, LinearScale, CategoryScale, Title, } from 'chart.js';
 
 const TON_ENDPOINT =
   "https://testnet.toncenter.com/api/v2/jsonRPC?api_key=4b3188a7c67ca35e532bc09763b9e6f1434a105f9e019ea8c9e7e74a4fafad68";
@@ -227,25 +228,11 @@ function renderPieChart(data: { label: string; value: number }[]) {
   });
 }
 
-// On clicking auto decode button or on page load with address
 async function onAutoDecodeBtnClick(address: string) {
   try {
-    const { int1, int2, int3, cell } = await getAccountDataBoc(address);
+    const { cell } = await getAccountDataBoc(address);
 
-    const totalShares = int1;
-    const totalPendingJettons = int2;
-    const investorCount = Number(int3);
-
-    const investorsHtml = parseBoc2(cell.toBoc());
-
-    const fullHtml = `
-      <p>Total Shares: ${totalShares}</p>
-      <p>Total Pending Jettons: ${totalPendingJettons}</p>
-      <p>Investor Count: ${investorCount}</p>
-      ${investorsHtml}
-    `;
-
-    createCollapsibleResult("Treasury Info", fullHtml);
+    renderInvestorTable(cell.toBoc());
 
     const shareData = extractInvestorShares(cell.toBoc());
     renderPieChart(shareData);
@@ -255,7 +242,7 @@ async function onAutoDecodeBtnClick(address: string) {
   }
 }
 
-document.getElementById("autoDecodeBtn")!.onclick = (event) => {
+document.getElementById("autoDecodeBtn")!.onclick = () => {
   onAutoDecodeBtnClick(globalAddress);
 };
 
@@ -324,7 +311,6 @@ function setupCheckStatusREST() {
   });
 }
 
-// On page load setup
 window.addEventListener('DOMContentLoaded', () => {
   const savedAddresses = getSavedAddresses();
 
@@ -348,29 +334,37 @@ window.addEventListener('DOMContentLoaded', () => {
   setupSelectChangeListener();
   setupCheckStatusREST();
   setupViewOnTonviewer();
-});
 
-// Initialize on load
-window.addEventListener('DOMContentLoaded', () => {
-  const savedAddresses = getSavedAddresses();
-
-  if (savedAddresses.length === 0) {
-    alert("No saved treasury addresses found in localStorage under key 'treasuryAddresses'. Please add some.");
-    return;
-  }
-
-  populateAddressSelect(savedAddresses);
-
-  const addressFromQuery = getQueryParam('address');
-  if (addressFromQuery && savedAddresses.includes(addressFromQuery)) {
-    globalAddress = addressFromQuery;
-  } else {
-    globalAddress = savedAddresses[0];
-  }
-
-  const select = document.getElementById('treasurySelect') as HTMLSelectElement;
-  select.value = globalAddress;
-
-  setupSelectChangeListener();
   onAutoDecodeBtnClick(globalAddress);
 });
+
+// Tab zone
+
+const tabs = document.querySelectorAll('.tabs > div');
+const contents = document.querySelectorAll('.tab-content');
+
+tabs.forEach(tab => {
+  tab.addEventListener('click', () => {
+    tabs.forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+
+    const target = tab.getAttribute('data-tab');
+    contents.forEach(content => {
+      if (content.id === target) {
+        content.classList.add('active');
+      } else {
+        content.classList.remove('active');
+      }
+    });
+  });
+});
+
+// rendering tabs content zone
+
+async function renderInvestorTable(buffer: Buffer) {
+  const html = parseBoc2(buffer);
+  const container = document.getElementById("investorTableContainer");
+  if (container) {
+    container.innerHTML = html;
+  }
+}

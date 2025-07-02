@@ -6,78 +6,97 @@
   <style>
     body {
       font-family: Arial, sans-serif;
-      margin: 20px;
       background: #f5f5f5;
+      margin: 0;
+      padding: 20px;
       color: #333;
     }
-
-    h1, h3 {
-      color: #2c3e50;
+    .dashboard {
+      display: grid;
+      grid-template-columns: 2fr 1.2fr;
+      gap: 20px;
     }
-
-    input[type="text"], textarea {
-      padding: 8px;
-      margin: 5px 0;
-      width: 100%;
-      max-width: 600px;
-      font-size: 1em;
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
-
-    button {
-      padding: 10px 15px;
-      margin: 5px 5px 15px 0;
-      font-size: 1em;
-      cursor: pointer;
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
     }
-
-    #tonTreasuryTool .result-block {
-      border: 1px solid #ccc;
+    select, input[type="text"] {
       padding: 10px;
-      margin: 15px 0;
-      background-color: #fff;
+      font-size: 14px;
+      border: 1px solid #ccc;
       border-radius: 5px;
+      flex: 1;
     }
-
-    #tonTreasuryTool .result-header {
+    button {
+      padding: 10px 20px;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 5px;
       cursor: pointer;
-      font-weight: bold;
-      margin-bottom: 5px;
     }
-
-    #tonTreasuryTool .result-content {
-      display: none;
+    .pie-and-graphs {
+      display: flex;
+      gap: 20px;
+    }
+    .pie-chart, .growth-graphs {
+      flex: 1;
+    }
+    .growth-graphs canvas {
+      display: block;
       margin-top: 10px;
-      white-space: pre-wrap;
-      font-family: monospace;
     }
-
-    #tonTreasuryTool .result-block.open .result-content {
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .owners-list td {
+      padding: 5px 0;
+    }
+    .tabs > div {
+      display: inline-block;       /* important: tabs stay side-by-side */
+      padding: 8px 16px;
+      margin-right: 8px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      font-weight: 600;
+      user-select: none;
+      transition: border-color 0.3s;
+    }
+    .tabs > div:hover {
+      border-bottom-color: #888;
+    }
+    .tabs > div.active {
+    border-bottom-color: #007bff;
+    color: #007bff;
+    }
+    .tab-content {
+      display: none;
+      margin-top: 20px;
+    }     
+    .tab-content.active {
       display: block;
     }
-
-    #statusBalance {
-      margin: 10px 0;
-      font-weight: bold;
-    }
-
-    #statusBalance.error {
-      color: red;
-    }
-
     table {
       width: 100%;
       border-collapse: collapse;
       margin-top: 10px;
+      font-size: 14px;
     }
-
-    table th, table td {
+    th, td {
+      border: 1px solid #ddd;
       padding: 8px;
-      border: 1px solid #ccc;
       text-align: left;
     }
-
-    textarea {
-      font-family: monospace;
+    .addresses-section table td:last-child {
+      text-align: right;
     }
   </style>
 </head>
@@ -106,30 +125,95 @@
       </div>
 
       <!-- Wallet Input -->
-      <div style="min-width: 280px; flex: 1;">
-        <label for="walletAddressInput" style="display: block; margin-bottom: 5px;">
-          <strong>Wallet Address:</strong>
+      <div style="min-width: 280px; flex: 1; display: flex; align-items: center; gap: 10px;">
+        <label for="walletAddressInput" style="white-space: nowrap; font-weight: bold;">
+          Wallet Address:
         </label>
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <input
-            type="text"
-            id="walletAddressInput"
-            placeholder="Enter wallet address"
-            style="flex: 1;"
-          />
-          <button id="processWalletBtn">Process</button>
-        </div>
-        <div id="walletResult" style="margin-top: 10px;"></div>
+        <input
+          type="text"
+          id="walletAddressInput"
+          placeholder="Enter wallet address"
+          style="flex: 1; padding: 6px 10px; border: 1px solid #ccc; border-radius: 6px;"
+        />
+        <button id="processWalletBtn" style="padding: 6px 12px;">Process</button>
       </div>
+      <div id="walletResult" style="margin-top: 10px;"></div>
       
-
     </div>
 
-    <!-- PIE CHART SECTION -->
-    <div style="display: flex; justify-content: flex-start; margin-bottom: 20px;">
-      <div style="background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
-        <canvas id="investorPieChart" width="300" height="300"></canvas>
+    <div class="dashboard" style="display: flex; gap: 20px; align-items: flex-start;">
+
+      <!-- Left column -->
+      <div class="left-column" style="flex: 2; min-width: 300px;">
+    
+        <div class="card pie-and-graphs">
+          <div class="pie-chart">
+            <canvas id="investorPieChart" width="200" height="200"></canvas>
+          </div>
+          <div class="growth-graphs">
+            <div style="font-size: 12px; margin-bottom: 5px;">
+              <span style="color:#f88">Red</span>
+              <span style="color:#88f">Blue</span>
+              <span style="color:#ff8">Yellow</span>
+            </div>
+            <div>Unclaimed</div>
+            <canvas id="unclaimedChart" width="200" height="50"></canvas>
+            <div style="margin-top:10px;">Distribution Growth</div>
+            <div style="font-size: 24px; font-weight: bold;">$1,200.00</div>
+            <canvas id="growthChart" width="200" height="50"></canvas>
+          </div>
+        </div>
+    
+        <div class="tabs">
+          <div class="active" data-tab="payout">Payout History</div>
+          <div data-tab="stake">Stake Growth</div>
+          <div data-tab="calls">Contract Calls</div>
+          <div data-tab="wallet">Wallet Analysis</div>
+        </div>
+    
+        <div id="payout" class="tab-content active">
+          <div class="card" id="investorTableContainer">
+            
+          </div>
+        </div>
+        <div id="stake" class="tab-content">
+          <div>stake</div>
+        </div>
+        <div id="calls" class="tab-content">
+          <!-- Content for calls -->
+        </div>
+        <div id="wallet" class="tab-content">
+          <!-- Content for wallet -->
+        </div>
+    
       </div>
+    
+      <!-- Right column (sidebar) -->
+      <div class="sidebar" style="flex: 1; min-width: 250px;">
+        <div class="card">
+          <h3>Treasury</h3>
+          <p>OQABC..XYZ9</p>
+          <table class="owners-list">
+            <tr><td>OQ123...4567</td><td>50.0%</td></tr>
+            <tr><td>0A890...BCDE</td><td>33.3%</td></tr>
+            <tr><td>OQF12...ZZZZ</td><td>16.5%</td></tr>
+          </table>
+          <h4>Recent Transactions</h4>
+          <p>Claim 0 →</p>
+          <button>Decode Tx from History</button>
+        </div>
+    
+        <div class="card addresses-section" style="margin-top: 20px;">
+          <h4>Addresses</h4>
+          <table>
+            <tr><td>2024-04-22</td><td>30⬇↑</td></tr>
+            <tr><td>2024-04-22</td><td>Claim</td></tr>
+            <tr><td>2024-04-19</td><td>Claim</td></tr>
+          </table>
+          <button>Decode Tx from History</button>
+        </div>
+      </div>
+    
     </div>
 
     <!-- RESULTS SECTION -->
@@ -143,6 +227,7 @@
     window.Buffer = Buffer;
   </script>
   <script type="module" src="/src/main.ts"></script>
+  <script type="module" src="/src/chart.ts"></script>
   <script>
     document.getElementById('goBackBtn')?.addEventListener('click', () => {
       window.location.href = 'index.html';
