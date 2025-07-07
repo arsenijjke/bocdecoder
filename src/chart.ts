@@ -29,7 +29,7 @@ Chart.register(
       datasets: [{
         label: 'Unclaimed Jettons',
         data: pendingData.map(d => d.pendingJettons),
-        borderColor: 'rgba(75, 192, 192, 1)',
+        borderColor: 'rgb(188, 2, 255)',
         backgroundColor: 'rgba(75, 192, 192, 0.2)',
         fill: true,
         tension: 0.3,
@@ -45,11 +45,13 @@ Chart.register(
       },
       scales: {
         y: {
+          display: false,
           beginAtZero: true,
-          title: { display: true, text: 'Jettons' }
+          title: { display: false, text: 'Jettons' }
         },
         x: {
-          title: { display: true, text: 'Date' }
+          display: false,
+          title: { display: false, text: 'Date' }
         }
       }
     }
@@ -93,7 +95,7 @@ Chart.register(
           label: 'Total Shares Over Time',
           data: values,
           fill: false,
-          borderColor: 'rgb(75, 192, 192)',
+          borderColor: 'rgb(17, 255, 0)',
           tension: 0.1,
           pointRadius: 4,
           pointBackgroundColor: 'rgb(75, 192, 192)',
@@ -102,18 +104,20 @@ Chart.register(
       options: {
         scales: {
           x: {
-            title: { display: true, text: 'Date' }
+            display: false,
+            title: { display: false, text: 'Date' }
           },
           y: {
-            title: { display: true, text: 'Total Shares' },
+            display: false,
+            title: { display: false, text: 'Total Shares' },
             beginAtZero: true
           }
         },
         plugins: {
           title: {
-            display: true,
+            display: false,
             text: 'Distribution Growth: Total Shares Over Time',
-            font: { size: 18 }
+            font: { size: 14 }
           }
         }
       }

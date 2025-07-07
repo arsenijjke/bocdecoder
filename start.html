@@ -170,20 +170,51 @@
           <div data-tab="calls">Contract Calls</div>
           <div data-tab="wallet">Wallet Analysis</div>
         </div>
-    
-        <div id="payout" class="tab-content active">
-          <div class="card" id="investorTableContainer">
-            
+
+        <div id="payout" class="tab-content">
+          <div class="card">
+            <table id="payoutHistoryTable">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Recipient</th>
+                  <th>Amount (TON)</th>
+                  <th>Memo</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Filled by JS -->
+              </tbody>
+            </table>
           </div>
         </div>
         <div id="stake" class="tab-content">
-          <div>stake</div>
+          <div class="card">
+            <h3>Stake Growth Over Time</h3>
+            <canvas id="stakeGrowthChart" height="50"></canvas>
+          </div>
         </div>
         <div id="calls" class="tab-content">
-          <!-- Content for calls -->
+          <div class="card">
+            <table id="contractCallsTable">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Sender</th>
+                  <th>Value (TON)</th>
+                  <th>Message</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Filled dynamically -->
+              </tbody>
+            </table>
+          </div>
         </div>
         <div id="wallet" class="tab-content">
-          <!-- Content for wallet -->
+          <div class="card" id="investorTableContainer">
+            
+          </div>
         </div>
     
       </div>

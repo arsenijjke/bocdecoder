@@ -1,6 +1,5 @@
 import { TonClient, Cell, Address, Dictionary, Slice } from "@ton/ton";
 import { Chart, PieController, ArcElement, Tooltip, Legend } from 'chart.js';
-import {LineController, LineElement, PointElement, LinearScale, CategoryScale, Title, } from 'chart.js';
 
 const TON_ENDPOINT =
   "https://testnet.toncenter.com/api/v2/jsonRPC?api_key=4b3188a7c67ca35e532bc09763b9e6f1434a105f9e019ea8c9e7e74a4fafad68";
@@ -343,6 +342,7 @@ window.addEventListener('DOMContentLoaded', () => {
 const tabs = document.querySelectorAll('.tabs > div');
 const contents = document.querySelectorAll('.tab-content');
 
+
 tabs.forEach(tab => {
   tab.addEventListener('click', () => {
     tabs.forEach(t => t.classList.remove('active'));
@@ -352,6 +352,13 @@ tabs.forEach(tab => {
     contents.forEach(content => {
       if (content.id === target) {
         content.classList.add('active');
+        if (target === 'stake') {
+          renderStakeGrowthChart();
+        } else if(target === 'calls') {
+          renderContractCalls();
+        } else if(target === 'payout') {
+          renderPayoutHistory();
+        }
       } else {
         content.classList.remove('active');
       }
@@ -367,4 +374,225 @@ async function renderInvestorTable(buffer: Buffer) {
   if (container) {
     container.innerHTML = html;
   }
+}
+
+let stakeChartInstance: Chart | null = null;
+// Stake Growth tab 
+export async function renderStakeGrowthChart() {
+  const stakeHistory = await fetchStakeGrowthFromToncenter();
+
+  const labels = stakeHistory.map((_, i) => i + 1);
+  const stakeData = stakeHistory.map(p => p.totalShares);
+
+  const ctx = (document.getElementById("stakeGrowthChart") as HTMLCanvasElement).getContext("2d")!;
+
+  if (stakeChartInstance) {
+    stakeChartInstance.destroy();
+  }
+
+  stakeChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data: stakeData,
+        borderColor: 'rgb(17, 20, 241)',
+        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 5,
+        pointHoverRadius: 10,
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        x: {
+          display: false,
+          grid: {
+            display: false,
+          }
+        },
+        y: {
+          display: false,
+          beginAtZero: true,
+          grid: {
+            color: '#eee',
+          },
+          title: {
+            display: true,
+          }
+        }
+      },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            title: (tooltipItems) => {
+              const idx = tooltipItems[0].dataIndex;
+              return stakeHistory[idx].date;
+            },
+            label: (tooltipItem) => `Shares: ${tooltipItem.formattedValue}`
+          }
+        },
+        legend: {
+          display: false,
+        }
+      }
+    }
+  });
+}
+
+export async function fetchStakeGrowthFromToncenter() {
+  const limit = 100;
+  const response = await fetch(`https://testnet.toncenter.com/api/v2/getTransactions?address=${globalAddress}&limit=${limit}`);
+  const json = await response.json();
+
+  const transactions = json.result;
+
+  const stakePoints = [];
+  let totalShares = 0;
+
+  for (const tx of transactions.reverse()) {
+    const inMsg = tx.in_msg;
+
+    if (inMsg && inMsg.value && inMsg.source) {
+      const tonAmount = Number(inMsg.value) / 1e9; // Convert nanotons to TON
+
+      // Example rule: 100 shares per TON staked (adjust based on your contract logic)
+      const sharesAdded = tonAmount * 100;
+      totalShares += sharesAdded;
+
+      stakePoints.push({
+        date: new Date(tx.utime * 1000).toISOString().split('T')[0],
+        totalShares: Math.floor(totalShares)
+      });
+    }
+  }
+
+  return stakePoints;
+}
+
+// contract calls tab
+export async function fetchContractCalls() {
+  const response = await fetch(`https://testnet.toncenter.com/api/v2/getTransactions?address=${globalAddress}&limit=100`);
+  const json = await response.json();
+  const txs = json.result;
+
+  const calls = [];
+
+  for (const tx of txs) {
+    const msg = tx.in_msg;
+
+    if (msg && msg.source && msg.msg_data) {
+      const date = new Date(tx.utime * 1000).toLocaleDateString();
+      const source = msg.source;
+      const value = Number(msg.value) / 1e9;
+      const type = msg.msg_data.type;
+
+      let decodedBody = '';
+
+      if (type === 'text') {
+        decodedBody = msg.msg_data.text;
+      } else if (type === 'decrypted_text') {
+        decodedBody = msg.msg_data.decrypted_text;
+      } else if (type === 'raw') {
+        decodedBody = '[Raw message]';
+      } else {
+        decodedBody = `[${type}]`;
+      }
+
+      calls.push({
+        date,
+        source,
+        value,
+        decodedBody,
+      });
+    }
+  }
+
+  return calls;
+}
+
+export async function renderContractCalls() {
+  const data = await fetchContractCalls();
+  const tableBody = document.querySelector('#contractCallsTable tbody');
+  if (!tableBody) {
+    console.warn('Contract calls table not found in DOM.');
+    return;
+  }
+  tableBody.innerHTML = '';
+
+  data.forEach(call => {
+    const row = document.createElement('tr');
+
+    row.innerHTML = `
+      <td>${call.date}</td>
+      <td>${call.source}</td>
+      <td>${call.value.toFixed(2)}</td>
+      <td>${call.decodedBody}</td>
+    `;
+
+    tableBody.appendChild(row);
+  });
+}
+
+export async function fetchPayoutHistory() {
+  const response = await fetch(`https://testnet.toncenter.com/api/v2/getTransactions?address=${globalAddress}&limit=100`);
+  const json = await response.json();
+  const txs = json.result;
+
+  const payouts = [];
+
+  for (const tx of txs) {
+    if (tx.out_msgs && tx.out_msgs.length > 0) {
+      for (const out of tx.out_msgs) {
+        if (out.destination && out.value > 0) {
+          const date = new Date(tx.utime * 1000).toLocaleDateString();
+          const destination = out.destination;
+          const value = Number(out.value) / 1e9;
+
+          let memo = '';
+          const msgData = out.msg_data;
+          if (msgData?.type === 'text') {
+            memo = msgData.text;
+          } else if (msgData?.type === 'decrypted_text') {
+            memo = msgData.decrypted_text;
+          } else if (msgData?.type === 'raw') {
+            memo = '[Raw message]';
+          }
+
+          payouts.push({
+            date,
+            destination,
+            value,
+            memo,
+          });
+        }
+      }
+    }
+  }
+
+  return payouts;
+}
+
+export async function renderPayoutHistory() {
+  const data = await fetchPayoutHistory();
+  const tableBody = document.querySelector('#payoutHistoryTable tbody');
+  if (!tableBody) {
+    console.warn('Payout table not found in DOM.');
+    return;
+  }
+
+  tableBody.innerHTML = '';
+
+  data.forEach(payout => {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${payout.date}</td>
+      <td>${payout.destination}</td>
+      <td>${payout.value.toFixed(2)}</td>
+      <td>${payout.memo}</td>
+    `;
+    tableBody.appendChild(row);
+  });
 }
