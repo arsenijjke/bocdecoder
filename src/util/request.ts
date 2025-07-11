@@ -37,3 +37,31 @@ export async function getAccountDataBoc(address: string, client: TonClient) {
       return { status: "Error: " + e.message, balance: null };
     }
   }
+
+  export async function getTokensByAddressTonviewer(address: string) {
+    const url = `https://testnet.toncenter.com/api/v2/getTransactions?address=${address}&limit=50`;
+  
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+  
+      const data = await res.json();
+  
+      // The response includes an array of jettons with info and balances
+      // Example shape: data.jettons = [{master: '...', balance: '...', decimals: 9, symbol: '...', ...}, ...]
+  
+      if (!data.jettons) return [];
+  
+      return data.jettons.map((jetton: any) => ({
+        jettonMaster: jetton.master,
+        balance: jetton.balance,
+        decimals: jetton.decimals,
+        symbol: jetton.symbol,
+        name: jetton.name,
+        image: jetton.image,
+      }));
+  
+    } catch (e: any) {
+      throw new Error(`Failed to get tokens: ${e.message}`);
+    }
+  }

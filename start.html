@@ -149,7 +149,7 @@
     
         <div class="card pie-and-graphs">
           <div class="pie-chart">
-            <canvas id="investorPieChart" width="200" height="200"></canvas>
+            <canvas id="investorPieChart" width="400" height="400"></canvas>
           </div>
           <div class="growth-graphs">
             <div style="font-size: 12px; margin-bottom: 5px;">
@@ -157,10 +157,9 @@
               <span style="color:#88f">Blue</span>
               <span style="color:#ff8">Yellow</span>
             </div>
-            <div>Unclaimed</div>
+            <div>Unclaimed 281955</div>
             <canvas id="unclaimedChart" width="200" height="50"></canvas>
-            <div style="margin-top:10px;">Distribution Growth</div>
-            <div style="font-size: 24px; font-weight: bold;" id="jettonBalance">$1,200.00</div>
+            <div style="font-size: 24px; font-weight: bold;" id="jettonBalance"></div>
             <canvas id="growthChart" width="200" height="50"></canvas>
           </div>
         </div>
@@ -224,25 +223,40 @@
       <div class="sidebar" style="flex: 1; min-width: 250px;">
         <div class="card">
           <h3>Treasury</h3>
-          <p>OQABC..XYZ9</p>
-          <table class="owners-list">
-            <tr><td>OQ123...4567</td><td>50.0%</td></tr>
-            <tr><td>0A890...BCDE</td><td>33.3%</td></tr>
-            <tr><td>OQF12...ZZZZ</td><td>16.5%</td></tr>
-          </table>
+          <p></p>
+          <table class="owners-list"></table>
           <h4>Recent Transactions</h4>
-          <p>Claim 0 →</p>
+          <p>No recent transactions were made</p>
           <button>Decode Tx from History</button>
         </div>
     
-        <div class="card addresses-section" style="margin-top: 20px;">
-          <h4>Addresses</h4>
-          <table>
-            <tr><td>2024-04-22</td><td>30⬇↑</td></tr>
-            <tr><td>2024-04-22</td><td>Claim</td></tr>
-            <tr><td>2024-04-19</td><td>Claim</td></tr>
+        <div class="card currency-table" style="margin-top: 20px;">
+          <h4>Current Fund Summary</h4>
+          <table cellpadding="8">
+            <thead>
+              <tr>
+                <th>Currency</th>
+                <th>Rate (USD)</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>USDT</td>
+                <td>$1.00</td>
+                <td id="usdtValue">$0.00</td>
+              </tr>
+              <tr>
+                <td>TON</td>
+                <td id="tonRate">Loading...</td>
+                <td id="tonValue">Loading...</td>
+              </tr>
+              <tr>
+                <td colspan="2" style="text-align:right; font-weight:bold;">Total Fiat Value</td>
+                <td id="totalFiatValue">$0.00</td>
+              </tr>
+            </tbody>
           </table>
-          <button>Decode Tx from History</button>
         </div>
       </div>
     

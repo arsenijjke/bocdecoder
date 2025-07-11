@@ -1,8 +1,10 @@
 import { TonClient, Cell, Address, Dictionary, Slice } from "@ton/ton";
-import { Chart } from 'chart.js';
-import { renderPieChart, renderStakeGrowthChart } from './chart.ts'
+import { displayJettonDistribution } from './util/distribution_growth.ts';
+import { renderPieChart, renderStakeGrowthChart, renderUnclaimedChart } from './chart.ts'
 import { createCollapsibleResult, renderInvestorTable } from './util/parseBoc.ts';
-import { getAccountDataBoc, getAccountInfoREST } from './util/request.ts';
+import { getAccountDataBoc, getAccountInfoREST, getTokensByAddressTonviewer } from './util/request.ts';
+import { updateValues } from './util/fiat.ts';
+import { loadTreasuryData } from './util/holders.ts';
 
 const TON_ENDPOINT =
   "https://testnet.toncenter.com/api/v2/jsonRPC?api_key=4b3188a7c67ca35e532bc09763b9e6f1434a105f9e019ea8c9e7e74a4fafad68";
@@ -33,12 +35,19 @@ window.addEventListener('DOMContentLoaded', async () => {
   setupCheckStatusREST();
   setupViewOnTonviewer();
   onAutoDecodeBtnClick(globalAddress);
+  const jettonMaster = await fetchJettonMasterAddress(globalAddress);
+  console.log(getTokensByAddressTonviewer(jettonMaster))
+  displayJettonDistribution(jettonMaster);
+  renderUnclaimedChart(jettonMaster);
+  loadTreasuryData(jettonMaster);
 
-  const transactions = await fetchTransactions(globalAddress, 100);
-  displayJettonMasterBalanceGrowth(globalAddress, transactions);
+  fetchTonPrice();
+  updateValues();
+  //updateFundSummary(jettonMaster);
+  //setInterval(() => updateFundSummary(jettonMaster), 60_000);
 
   try {
-    const transactions = await fetchTransactions(globalAddress, 100);
+    const transactions = await fetchTransactions(globalAddress, 50);
     setupTabs(transactions); // See below
   } catch (err) {
     console.error("Error setting up tabs:", err);
@@ -71,6 +80,26 @@ function setupTabs(transactions: any[]) {
       });
     });
   });
+}
+
+async function fetchTonPrice() {
+  try {
+    const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=usd");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    const tonPrice = json["the-open-network"]?.usd;
+
+    const tonRateEl = document.getElementById("tonRate");
+    if (tonRateEl) {
+      tonRateEl.textContent = tonPrice ? `$${tonPrice.toFixed(2)}` : "N/A";
+    }
+  } catch (err) {
+    console.error("Error fetching TON price:", err);
+    const tonRateEl = document.getElementById("tonRate");
+    if (tonRateEl) {
+      tonRateEl.textContent = "Error";
+    }
+  }
 }
 
 // Extract investor shares to be displayed on the pie chart
@@ -426,66 +455,4 @@ function reconstructBalanceHistory(latestBalance: number, transactions: Transact
   history.push({ date: new Date().toISOString().slice(0, 10), balance: latestBalance / 1e9 });
 
   return history;
-}
-
-async function displayJettonMasterBalanceGrowth(address: string, transactions: any[]) {
-  try {
-    const jettonMaster = await fetchJettonMasterAddress(address);
-    const latestBalanceNano = await fetchJettonMasterBalance(jettonMaster);
-
-    const history = reconstructBalanceHistory(latestBalanceNano, transactions);
-
-    // Prepare data for chart
-    const labels = history.map(p => p.date);
-    const values = history.map(p => Number(p.balance.toFixed(2)));
-
-    // Show current balance
-    const balanceElem = document.getElementById('jettonBalance');
-    if (balanceElem) {
-      balanceElem.innerText = `$${(latestBalanceNano / 1e9).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    }
-
-    // Render Chart
-    const ctx = (document.getElementById("growthChart") as HTMLCanvasElement).getContext("2d")!;
-    if (!ctx) throw new Error('Canvas context not found');
-
-    new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels,
-        datasets: [{
-          label: 'TON Balance',
-          data: values,
-          fill: false,
-          borderColor: 'rgb(17, 255, 0)',
-          tension: 0.2,
-          pointRadius: 4,
-          pointBackgroundColor: 'rgb(75, 192, 192)',
-        }]
-      },
-      options: {
-        scales: {
-          x: {
-            display: false,
-          },
-          y: {
-            display: false,
-            beginAtZero: true
-          }
-        },
-        plugins: {
-          legend: { display: false },
-          tooltip: { enabled: true },
-          title: {
-            display: false
-          }
-        }
-      }
-    });
-
-  } catch (e) {
-    console.error('Error:', e);
-    const balanceElem = document.getElementById('jettonBalance');
-    if (balanceElem) balanceElem.innerText = 'Error loading data';
-  }
 }
