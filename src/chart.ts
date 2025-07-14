@@ -38,7 +38,7 @@ export async function fetchJettonHolders(masterAddress: string): Promise<Holder[
   });
 }
 // --- Fetch max supply (mock example) ---
-async function fetchMaxSupply(masterAddress: string): Promise<number> {
+async function fetchMaxSupply(): Promise<number> {
   // TODO: Replace this with actual contract call to get total supply if available
   // For demo, return fixed value
   return 282000;
@@ -52,7 +52,7 @@ async function fetchTotalBought(masterAddress: string): Promise<number> {
 
 // --- Calculate unclaimed tokens ---
 async function calculateUnclaimed(masterAddress: string): Promise<number> {
-  const maxSupply = await fetchMaxSupply(masterAddress);
+  const maxSupply = await fetchMaxSupply();
   const totalBought = await fetchTotalBought(masterAddress);
   return maxSupply - totalBought;
 }
@@ -169,6 +169,48 @@ export async function renderUnclaimedChart(masterAddress: string) {
           title: {
             display: true,
             text: 'Stake Growth Over Time'
+          }
+        }
+      }
+    });
+  }
+
+  let profitChart: Chart | null = null;  // declare outside the function, in module/global scope
+
+  export function updatePieChart() {
+    const usdtValueText = document.getElementById("usdtValue")?.innerText.replace('$', '') ?? "0";
+    const tonValueText = document.getElementById("tonValue")?.innerText.replace('$', '') ?? "0";
+  
+    const usdtValue = parseFloat(usdtValueText);
+    const tonValue = parseFloat(tonValueText);
+  
+    const ctx = (document.getElementById("profitPieChart") as HTMLCanvasElement).getContext("2d")!;
+  
+    // Destroy old chart if exists
+    if (profitChart) {
+      profitChart.destroy();
+    }
+  
+    // Create new chart instance
+    profitChart = new Chart(ctx, {
+      type: 'pie',
+      data: {
+        labels: ['USDT', 'TON'],
+        datasets: [{
+          data: [usdtValue, tonValue],
+          backgroundColor: ['#4caf50', '#2196f3'],
+          hoverOffset: 10
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            position: 'bottom',
+          },
+          title: {
+            display: true,
+            text: 'Contribution to Total Profit'
           }
         }
       }

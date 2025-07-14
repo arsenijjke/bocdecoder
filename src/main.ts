@@ -2,9 +2,9 @@ import { TonClient, Cell, Address, Dictionary, Slice } from "@ton/ton";
 import { displayJettonDistribution } from './util/distribution_growth.ts';
 import { renderPieChart, renderStakeGrowthChart, renderUnclaimedChart } from './chart.ts'
 import { createCollapsibleResult, renderInvestorTable } from './util/parseBoc.ts';
-import { getAccountDataBoc, getAccountInfoREST, getTokensByAddressTonviewer } from './util/request.ts';
-import { updateValues } from './util/fiat.ts';
+import { getAccountDataBoc, getAccountInfoREST } from './util/request.ts';
 import { loadTreasuryData } from './util/holders.ts';
+import { updateValues } from './util/fiat.ts';
 
 const TON_ENDPOINT =
   "https://testnet.toncenter.com/api/v2/jsonRPC?api_key=4b3188a7c67ca35e532bc09763b9e6f1434a105f9e019ea8c9e7e74a4fafad68";
@@ -36,13 +36,12 @@ window.addEventListener('DOMContentLoaded', async () => {
   setupViewOnTonviewer();
   onAutoDecodeBtnClick(globalAddress);
   const jettonMaster = await fetchJettonMasterAddress(globalAddress);
-  console.log(getTokensByAddressTonviewer(jettonMaster))
   displayJettonDistribution(jettonMaster);
   renderUnclaimedChart(jettonMaster);
   loadTreasuryData(jettonMaster);
 
   fetchTonPrice();
-  updateValues();
+  setValuesAndUpdate();
   //updateFundSummary(jettonMaster);
   //setInterval(() => updateFundSummary(jettonMaster), 60_000);
 
@@ -219,15 +218,13 @@ function setupViewOnTonviewer() {
 }
 
 // Button to check account status REST API
-function setupCheckStatusREST() {
-  const btn = document.getElementById('checkStatusBtn')!;
-  btn.addEventListener('click', async () => {
-    if (!globalAddress) return alert('Select an address first');
-    const statusDisplay = document.getElementById('statusBalance')!;
-    statusDisplay.textContent = 'Checking...';
-    const { status, balance } = await getAccountInfoREST(globalAddress);
-    statusDisplay.textContent = `${status}${balance !== null ? ` (Balance: ${balance} TON)` : ''}`;
-  });
+async function setupCheckStatusREST() {
+  if (!globalAddress) return alert('Select an address first');
+  const statusDisplay = document.getElementById('statusBalance')!;
+  statusDisplay.textContent = 'Checking...';
+  const { status, balance } = await getAccountInfoREST(globalAddress);
+  statusDisplay.textContent = `${status}${balance !== null ? ` (Balance: ${balance} TON)` : ''}`;
+  updateValues(balance!);
 }
 
 export async function fetchTransactions(address: string, limit = 100) {
@@ -418,41 +415,82 @@ async function fetchJettonMasterAddress(address: string): Promise<string> {
   return jettonMasterAddress;
 }
 
-async function fetchJettonMasterBalance(address: string) {
-  const res = await fetch(`https://testnet.toncenter.com/api/v2/getAddressBalance?address=${address}`);
-  const json = await res.json();
-  if (!json.ok) throw new Error(`Error fetching balance: ${json.error || JSON.stringify(json)}`);
-  return Number(json.result); // nanotons
+async function waitUntilBalancesReady(): Promise<void> {
+  return new Promise((resolve) => {
+    const interval = setInterval(() => {
+      const usdtText = document.getElementById("jettonBalance")?.textContent ?? "";
+      const statusText = document.getElementById("statusBalance")?.textContent ?? "";
+
+      const usdt = parseFloat(usdtText.replace(/[^0-9.]/g, ""));
+      const tonMatch = statusText.match(/Balance:\s*([\d.]+)\s*TON/i);
+      const ton = tonMatch ? parseFloat(tonMatch[1]) : NaN;
+
+      if (!isNaN(usdt) && !isNaN(ton)) {
+        clearInterval(interval);
+        resolve();
+      }
+    }, 200);
+  });
 }
 
-interface Transaction {
-  utime: number;
-  in_msg?: {
-    value?: string; // TON values come as strings in API
-  };
-  out_msgs?: { value?: string }[];
+async function setValuesAndUpdate(): Promise<void> {
+  await waitUntilBalancesReady();
+
+  const usdtText = document.getElementById("jettonBalance")?.textContent ?? "";
+  const statusText = document.getElementById("statusBalance")?.textContent ?? "";
+
+  const usdt = parseFloat(usdtText.replace(/[^0-9.]/g, ""));
+  const tonMatch = statusText.match(/Balance:\s*([\d.]+)\s*TON/i);
+  const ton = tonMatch ? parseFloat(tonMatch[1]) : 0;
+
+  // Set values to the <td> elements
+  const usdtValueEl = document.getElementById("usdtValue");
+  const tonValueEl = document.getElementById("tonValue");
+
+  if (usdtValueEl) usdtValueEl.textContent = `$${usdt.toFixed(2)}`;
+  if (tonValueEl) tonValueEl.textContent = `${ton.toFixed(2)} TON`;
+
+  // Call your function
+  await updateValues(ton);
 }
 
-function reconstructBalanceHistory(latestBalance: number, transactions: Transaction[]) {
-  let balance = latestBalance;
-  const history = [];
 
-  // Transactions are ordered newest first, reverse to oldest first
-  const txs = transactions.slice().reverse();
+// async function fetchJettonMasterBalance(address: string) {
+//   const res = await fetch(`https://testnet.toncenter.com/api/v2/getAddressBalance?address=${address}`);
+//   const json = await res.json();
+//   if (!json.ok) throw new Error(`Error fetching balance: ${json.error || JSON.stringify(json)}`);
+//   return Number(json.result); // nanotons
+// }
 
-  for (const tx of txs) {
-    const date = new Date(tx.utime * 1000).toISOString().slice(0, 10);
+// interface Transaction {
+//   utime: number;
+//   in_msg?: {
+//     value?: string; // TON values come as strings in API
+//   };
+//   out_msgs?: { value?: string }[];
+// }
 
-    const inVal = tx.in_msg?.value ? Number(tx.in_msg.value) : 0;
-    const outVal = (tx.out_msgs || []).reduce((sum, msg) => sum + Number(msg.value || 0), 0);
-    const netChange = inVal - outVal;
+// function reconstructBalanceHistory(latestBalance: number, transactions: Transaction[]) {
+//   let balance = latestBalance;
+//   const history = [];
 
-    history.push({ date, balance: balance / 1e9 }); // TON units
+//   // Transactions are ordered newest first, reverse to oldest first
+//   const txs = transactions.slice().reverse();
 
-    balance -= netChange;
-  }
-  // Add latest point as well (today)
-  history.push({ date: new Date().toISOString().slice(0, 10), balance: latestBalance / 1e9 });
+//   for (const tx of txs) {
+//     const date = new Date(tx.utime * 1000).toISOString().slice(0, 10);
 
-  return history;
-}
+//     const inVal = tx.in_msg?.value ? Number(tx.in_msg.value) : 0;
+//     const outVal = (tx.out_msgs || []).reduce((sum, msg) => sum + Number(msg.value || 0), 0);
+//     const netChange = inVal - outVal;
+
+//     history.push({ date, balance: balance / 1e9 }); // TON units
+
+//     balance -= netChange;
+//   }
+//   // Add latest point as well (today)
+//   history.push({ date: new Date().toISOString().slice(0, 10), balance: latestBalance / 1e9 });
+
+//   return history;
+// }
+

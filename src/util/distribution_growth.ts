@@ -54,7 +54,7 @@ type Holder = {
     try {
       const holders = await fetchJettonHolders(masterAddress);
   
-      const labels = holders.map((_, i) => ``);
+      const labels = holders.map((_, ) => ``);
   
       // Calculate cumulative sums of balances
       const cumulativeData: number[] = [];
