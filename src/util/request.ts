@@ -1,4 +1,4 @@
-import { Address, TonClient } from "@ton/ton";
+import { Address, TonClient, beginCell, } from "@ton/ton";
 
 // Call getFullTreasuryState get-method on smart contract and parse results
 export async function getAccountDataBoc(address: string, client: TonClient) {
@@ -64,4 +64,32 @@ export async function getAccountDataBoc(address: string, client: TonClient) {
     } catch (e: any) {
       throw new Error(`Failed to get tokens: ${e.message}`);
     }
+  }
+
+  export async function getInvestorInfoData(tonClient: TonClient, treasuryAddress: Address, investorAddress: Address) {
+    // Construct the exact cell the smart contract expects: just the address
+    const argCell = beginCell().storeAddress(investorAddress).endCell();
+  
+    // Call the method with a slice containing that cell
+    const res = await tonClient.callGetMethod(treasuryAddress, 'getInvestorInfo', [
+      {
+        type: 'slice',
+        cell: argCell
+      }
+    ]);
+  
+    const stack = res.stack;
+  
+    const investorCell = stack.readCell();            // Usually cell with investor info
+    const pendingJettons = stack.readBigNumber();     // Usually int
+    const share = stack.readBigNumber();              // Usually int
+  
+    const investorCellBocBase64 = investorCell.toBoc({ idx: false }).toString('base64');
+  
+    return {
+      investorCell,
+      investorCellBocBase64,
+      pendingJettons,
+      share
+    };
   }

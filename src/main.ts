@@ -2,7 +2,7 @@ import { TonClient, Cell, Address, Dictionary, Slice } from "@ton/ton";
 import { displayJettonDistribution } from './util/distribution_growth.ts';
 import { renderPieChart, renderStakeGrowthChart, renderUnclaimedChart } from './chart.ts'
 import { createCollapsibleResult, renderInvestorTable } from './util/parseBoc.ts';
-import { getAccountDataBoc, getAccountInfoREST } from './util/request.ts';
+import { getAccountDataBoc, getAccountInfoREST, getInvestorInfoData } from './util/request.ts';
 import { loadTreasuryData } from './util/holders.ts';
 import { updateValues } from './util/fiat.ts';
 
@@ -275,41 +275,49 @@ export function fetchStakeGrowthFromToncenter(transactions: any[]) {
 
 // Contract calls tab
 
-export async function fetchContractCalls(transactions: any[]) {
+export async function fetchContractCalls(txs: any[]) {
   const calls = [];
 
-  for (const tx of transactions) {
-    const msg = tx.in_msg;
+  for (const tx of txs) {
+    // Adjust the path here
+    const msg = tx.in_msg || tx.inMessage || tx.inMessageInfo;
 
-    if (msg && msg.source && msg.msg_data) {
-      const date = new Date(tx.utime * 1000).toLocaleDateString();
-      const source = msg.source;
-      const value = Number(msg.value) / 1e9;
-      const type = msg.msg_data.type;
+    if (!msg) continue;                        // no inbound message
 
-      let decodedBody = '';
-      if (type === 'text') {
-        decodedBody = msg.msg_data.text;
-      } else if (type === 'decrypted_text') {
-        decodedBody = msg.msg_data.decrypted_text;
-      } else if (type === 'raw') {
-        decodedBody = '[Raw message]';
-      } else {
-        decodedBody = `[${type}]`;
-      }
+    const date  = new Date(tx.utime * 1000).toLocaleDateString();
 
-      calls.push({
-        date,
-        source,
-        value,
-        decodedBody,
-      });
+    // Deal with source possibly being an object
+    const src   = msg.source || msg.from || msg.src;
+    const source = typeof src === 'string'
+      ? src
+      : src?.address || JSON.stringify(src);
+
+    const value = Number(msg.value ?? msg.amount ?? 0) / 1e9;
+
+    /* ------- decode body text, adjust field names ------- */
+    const body  = msg.msg_data || msg.body || msg.data;
+    let decodedBody = '';
+
+    if (typeof body === 'string') {
+      decodedBody = body;
+    } else if (body?.text) {
+      decodedBody = body.text;
+    } else if (body?.decrypted_text) {
+      decodedBody = body.decrypted_text;
+    } else if (body?.type === 'raw') {
+      decodedBody = '[Raw message]';
+    } else if (body?.type) {
+      decodedBody = `[${body.type}]`;
+    } else {
+      decodedBody = '[unknown]';
     }
+
+    calls.push({ date, source, value, decodedBody });
   }
 
+  console.log("✅ extracted", calls.length, "contract calls");
   return calls;
 }
-
 
 export async function renderContractCalls(transactions: any[]) {
   const data = await fetchContractCalls(transactions);
@@ -323,14 +331,12 @@ export async function renderContractCalls(transactions: any[]) {
 
   data.forEach(call => {
     const row = document.createElement('tr');
-
     row.innerHTML = `
       <td>${call.date}</td>
       <td>${call.source}</td>
       <td>${call.value.toFixed(2)}</td>
       <td>${call.decodedBody}</td>
     `;
-
     tableBody.appendChild(row);
   });
 }
@@ -348,21 +354,10 @@ export async function fetchPayoutHistory(transactions: any[]) {
           const destination = out.destination;
           const value = Number(out.value) / 1e9;
 
-          let memo = '';
-          const msgData = out.msg_data;
-          if (msgData?.type === 'text') {
-            memo = msgData.text;
-          } else if (msgData?.type === 'decrypted_text') {
-            memo = msgData.decrypted_text;
-          } else if (msgData?.type === 'raw') {
-            memo = '[Raw message]';
-          }
-
           payouts.push({
             date,
             destination,
             value,
-            memo,
           });
         }
       }
@@ -386,9 +381,8 @@ export async function renderPayoutHistory(transactions: any[]) {
     const row = document.createElement('tr');
     row.innerHTML = `
       <td>${payout.date}</td>
-      <td>${payout.destination}</td>
+      <td>${payout.destination.address}</td>
       <td>${payout.value.toFixed(2)}</td>
-      <td>${payout.memo}</td>
     `;
     tableBody.appendChild(row);
   });
@@ -398,9 +392,6 @@ async function fetchJettonMasterAddress(address: string): Promise<string> {
   console.log(globalAddress + " global address");
   const res = await tonClient.callGetMethod(Address.parse(address), "jettonMaster", []);
   if (!res) throw new Error("No response from callGetMethod");
-
-  console.log("Raw result from callGetMethod:");
-  console.dir(res, { depth: 10 });
 
   const tuple = res.stack;
   let jettonMasterAddress = "";
@@ -455,42 +446,36 @@ async function setValuesAndUpdate(): Promise<void> {
 }
 
 
-// async function fetchJettonMasterBalance(address: string) {
-//   const res = await fetch(`https://testnet.toncenter.com/api/v2/getAddressBalance?address=${address}`);
-//   const json = await res.json();
-//   if (!json.ok) throw new Error(`Error fetching balance: ${json.error || JSON.stringify(json)}`);
-//   return Number(json.result); // nanotons
-// }
+document.getElementById("processWalletBtn")!.onclick = () => {
+  getWalletInfo();
+};
 
-// interface Transaction {
-//   utime: number;
-//   in_msg?: {
-//     value?: string; // TON values come as strings in API
-//   };
-//   out_msgs?: { value?: string }[];
-// }
+async function getWalletInfo() {
+  const treasuryAddressRaw = globalAddress
+  const investorAddressRaw = (document.getElementById('walletAddressInput') as HTMLInputElement).value.trim();
+  const resultDiv = document.getElementById('walletResult');
 
-// function reconstructBalanceHistory(latestBalance: number, transactions: Transaction[]) {
-//   let balance = latestBalance;
-//   const history = [];
+  if (!treasuryAddressRaw || !investorAddressRaw) {
+    resultDiv!.textContent = 'Please enter both treasury and wallet addresses.';
+    return;
+  }
 
-//   // Transactions are ordered newest first, reverse to oldest first
-//   const txs = transactions.slice().reverse();
+  try {
+    const treasuryAddress = Address.parse(treasuryAddressRaw);
+    const investorAddress = Address.parse(investorAddressRaw);
 
-//   for (const tx of txs) {
-//     const date = new Date(tx.utime * 1000).toISOString().slice(0, 10);
+    resultDiv!.textContent = 'Fetching investor data...';
 
-//     const inVal = tx.in_msg?.value ? Number(tx.in_msg.value) : 0;
-//     const outVal = (tx.out_msgs || []).reduce((sum, msg) => sum + Number(msg.value || 0), 0);
-//     const netChange = inVal - outVal;
+    const info = await getInvestorInfoData(tonClient, treasuryAddress, investorAddress);
 
-//     history.push({ date, balance: balance / 1e9 }); // TON units
-
-//     balance -= netChange;
-//   }
-//   // Add latest point as well (today)
-//   history.push({ date: new Date().toISOString().slice(0, 10), balance: latestBalance / 1e9 });
-
-//   return history;
-// }
-
+    resultDiv!.innerHTML = `
+      <strong>Pending Jettons:</strong> ${info.pendingJettons.toString()}<br />
+      <strong>Share:</strong> ${info.share.toString()}<br />
+      <strong>Investor Cell (base64):</strong><br />
+      <textarea rows="4" style="width: 100%;">${info.investorCellBocBase64}</textarea>
+    `;
+  } catch (err: any) {
+    console.error(err);
+    resultDiv!.textContent = 'Error processing wallet address: ' + (err.message || err);
+  }
+}

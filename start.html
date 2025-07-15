@@ -156,7 +156,7 @@
               <span style="color:#88f">Blue</span>
               <span style="color:#ff8">Yellow</span>
             </div>
-            <div>Unclaimed 281955</div>
+            <div></div>
             <canvas id="unclaimedChart" width="200" height="50"></canvas>
             <div style="font-size: 24px; font-weight: bold;" id="jettonBalance"></div>
             <canvas id="growthChart" width="200" height="50"></canvas>
@@ -164,10 +164,10 @@
         </div>
     
         <div class="tabs">
-          <div class="active" data-tab="payout">Payout History</div>
+          <div data-tab="payout">Payout History</div>
           <div data-tab="stake">Stake Growth</div>
           <div data-tab="calls">Contract Calls</div>
-          <div data-tab="wallet">Wallet Analysis</div>
+          <div class="active" data-tab="wallet">Wallet Analysis</div>
         </div>
 
         <div id="payout" class="tab-content">
@@ -178,7 +178,6 @@
                   <th>Date</th>
                   <th>Recipient</th>
                   <th>Amount (TON)</th>
-                  <th>Memo</th>
                 </tr>
               </thead>
               <tbody>

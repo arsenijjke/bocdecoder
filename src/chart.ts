@@ -7,35 +7,76 @@ type Holder = {
   balance: number;
 };
 
+let jettonHoldersCache: {
+  [address: string]: {
+    timestamp: number;
+    data: Holder[];
+  };
+} = {};
+
+const CACHE_TTL_MS = 60_000; // Cache for 60 seconds
+
 export async function fetchJettonHolders(masterAddress: string): Promise<Holder[]> {
+  const now = Date.now();
+
+  // ✅ Use cache if recent
+  const cached = jettonHoldersCache[masterAddress];
+  if (cached && now - cached.timestamp < CACHE_TTL_MS) {
+    console.log('✅ Using cached holders data');
+    return cached.data;
+  }
+
   const url = `https://testnet.tonapi.io/v2/jettons/${masterAddress}/holders?limit=100`;
-  const response = await fetch(url);
-  const json = await response.json();
 
-  console.log("Raw JSON response:", json);
+  try {
+    const response = await fetch(url);
 
-  if (!json.addresses || !Array.isArray(json.addresses)) {
-    const msg = json.error ? json.error : 'Invalid holders response structure';
-    throw new Error(msg);
-  }
-
-  if (json.addresses.length === 0) {
-    console.warn('No holders found for this jetton.');
-  }
-
-  return json.addresses.map((holder: any) => {
-    const address = holder.address;
-    const rawBalance = holder.balance;
-
-    if (!address || rawBalance === undefined) {
-      throw new Error('Missing holder address or balance');
+    // Explicitly check for rate limit
+    if (response.status === 429) {
+      throw new Error('Rate limit exceeded: Please wait before retrying.');
     }
 
-    return {
-      address,
-      balance: Number(rawBalance) / 1e9,  // convert from nano units
+    if (!response.ok) {
+      const errorJson = await response.json();
+      throw new Error(errorJson.error ?? 'Failed to fetch holders');
+    }
+
+    const json = await response.json();
+    console.log("Raw JSON response:", json);
+
+    if (!json.addresses || !Array.isArray(json.addresses)) {
+      throw new Error(json.error ?? 'Invalid holders response structure');
+    }
+
+    if (json.addresses.length === 0) {
+      console.warn('No holders found for this jetton.');
+    }
+
+    const holders = json.addresses.map((holder: any) => {
+      const address = holder.address;
+      const rawBalance = holder.balance;
+
+      if (!address || rawBalance === undefined) {
+        throw new Error('Missing holder address or balance');
+      }
+
+      return {
+        address,
+        balance: Number(rawBalance) / 1e9, // Convert from nano
+      };
+    });
+
+    // ✅ Save to cache
+    jettonHoldersCache[masterAddress] = {
+      timestamp: now,
+      data: holders,
     };
-  });
+
+    return holders;
+  } catch (error: any) {
+    console.error('❌ Error fetching jetton holders:', error.message);
+    throw new Error(`Failed to display jetton distribution: ${error.message}`);
+  }
 }
 // --- Fetch max supply (mock example) ---
 async function fetchMaxSupply(): Promise<number> {
