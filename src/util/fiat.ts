@@ -1,4 +1,4 @@
-import { updatePieChart } from "../chart";
+import { updatePieChart } from "./chart";
 
     /** Fetch live TON→USD rate from CoinGecko */
   async function getTonUsdPrice(): Promise<number> {

@@ -1,6 +1,7 @@
 import { Chart, Tooltip, Legend } from 'chart.js';
 import { LineController, LineElement, PointElement, LinearScale, CategoryScale, Title, PieController, ArcElement } from 'chart.js';
-import { fetchStakeGrowthFromToncenter } from './main.ts'
+import { fetchStakeGrowthFromToncenter } from './tab.ts'
+import { TonClient, Address } from "@ton/ton";
 
 type Holder = {
   address: string;
@@ -19,7 +20,6 @@ const CACHE_TTL_MS = 60_000; // Cache for 60 seconds
 export async function fetchJettonHolders(masterAddress: string): Promise<Holder[]> {
   const now = Date.now();
 
-  // ✅ Use cache if recent
   const cached = jettonHoldersCache[masterAddress];
   if (cached && now - cached.timestamp < CACHE_TTL_MS) {
     console.log('✅ Using cached holders data');
@@ -62,11 +62,10 @@ export async function fetchJettonHolders(masterAddress: string): Promise<Holder[
 
       return {
         address,
-        balance: Number(rawBalance) / 1e9, // Convert from nano
+        balance: Number(rawBalance) / 1e9,
       };
     });
 
-    // ✅ Save to cache
     jettonHoldersCache[masterAddress] = {
       timestamp: now,
       data: holders,
@@ -78,11 +77,18 @@ export async function fetchJettonHolders(masterAddress: string): Promise<Holder[
     throw new Error(`Failed to display jetton distribution: ${error.message}`);
   }
 }
-// --- Fetch max supply (mock example) ---
-async function fetchMaxSupply(): Promise<number> {
-  // TODO: Replace this with actual contract call to get total supply if available
-  // For demo, return fixed value
-  return 282000;
+
+async function fetchMaxSupply(address: string,
+  client: TonClient,
+): Promise<bigint> {
+  const addr = Address.parse(address);
+
+  // Call the getter – empty params array for a no‑arg get‑method
+  const res = await client.callGetMethod(addr, "get_jetton_data", []);
+
+  // The very first stack item is uint256 total_supply
+  const totalSupply = res.stack.readBigNumber();   // bigint
+  return totalSupply;
 }
 
 // --- Calculate total bought (sum balances) ---
@@ -92,16 +98,24 @@ async function fetchTotalBought(masterAddress: string): Promise<number> {
 }
 
 // --- Calculate unclaimed tokens ---
-async function calculateUnclaimed(masterAddress: string): Promise<number> {
-  const maxSupply = await fetchMaxSupply();
-  const totalBought = await fetchTotalBought(masterAddress);
-  return maxSupply - totalBought;
+async function calculateUnclaimed(master: string, client: TonClient): Promise<number> {
+  const maxSupplyAtomic = await fetchMaxSupply(master, client);   // bigint
+  const totalBought     = await fetchTotalBought(master);         // number (float)
+
+  // convert maxSupply to *number* before the subtraction
+  const maxSupplyFloat  = Number(maxSupplyAtomic) / 1e9;          // 9 decimals
+  const unclaimedFloat  = maxSupplyFloat - totalBought;           // both numbers
+
+  document.getElementById("unclaimedBalance")!.textContent =
+    unclaimedFloat.toLocaleString();
+
+  return unclaimedFloat;
 }
 
 Chart.register(LineController, LineElement, PointElement, LinearScale, CategoryScale, Title, Tooltip, Legend);
 
-export async function renderUnclaimedChart(masterAddress: string) {
-  const unclaimedNow = await calculateUnclaimed(masterAddress);
+export async function renderUnclaimedChart(masterAddress: string, client: TonClient) {
+  const unclaimedNow = await calculateUnclaimed(masterAddress, client);
 
   // Mock some historical data based on current unclaimed amount
   // You can replace with your real historical data
@@ -145,42 +159,90 @@ export async function renderUnclaimedChart(masterAddress: string) {
   });
 }
 
+Chart.register(PieController, ArcElement, Tooltip, Legend);
 
-  Chart.register(PieController, ArcElement, Tooltip, Legend);
-  
-  export function renderPieChart(data: { label: string; value: number }[]) {
-    const ctx = document.getElementById('investorPieChart') as HTMLCanvasElement;
-    if (!ctx) {
-      console.error("Canvas element with id 'investorPieChart' not found");
-      return;
-    }
-  
-    if ((window as any).investorChart) {
-      (window as any).investorChart.destroy();
-    }
-  
-    (window as any).investorChart = new Chart(ctx, {
-      type: 'pie',
-      data: {
-        labels: data.map(d => d.label),
-        datasets: [{
-          label: 'Investor Shares',
-          data: data.map(d => d.value),
-          backgroundColor: [
-            '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
-            '#FF9F40', '#66FF66', '#FF6666', '#66CCFF', '#CCCC66'
-          ],
-          borderWidth: 0
-        }]
-      },
-      options: {
-        responsive: false,
-        plugins: {
-          legend: { position: 'right' }
+// --- Utility: Generate distinct colors ---
+function generateColors(count: number): string[] {
+  const colors: string[] = [];
+  for (let i = 0; i < count; i++) {
+    const hue = (i * 137.508) % 360; // golden angle to avoid repetition
+    colors.push(`hsl(${hue}, 65%, 60%)`);
+  }
+  return colors;
+}
+
+// --- Utility: Limit dataset to top N and group others ---
+function preparePieData(
+  rawData: { label: string; value: number }[],
+  limit: number = 10
+): { label: string; value: number }[] {
+  const sorted = [...rawData].sort((a, b) => b.value - a.value);
+  const top = sorted.slice(0, limit);
+  const rest = sorted.slice(limit);
+
+  const othersTotal = rest.reduce((sum, d) => sum + d.value, 0);
+  if (othersTotal > 0) {
+    top.push({ label: 'Others', value: othersTotal });
+  }
+
+  return top;
+}
+
+// --- Main function: Render the pie chart ---
+export function renderPieChart(data: { label: string; value: number }[]) {
+  const canvas = document.getElementById('investorPieChart') as HTMLCanvasElement;
+  if (!canvas) {
+    console.error("Canvas element with id 'investorPieChart' not found");
+    return;
+  }
+
+  // Clean up old chart if it exists
+  if ((window as any).investorChart) {
+    (window as any).investorChart.destroy();
+  }
+
+  const filteredData = preparePieData(data, 10);
+  const labels = filteredData.map(d => d.label);
+  const values = filteredData.map(d => d.value);
+  const colors = generateColors(filteredData.length);
+
+  (window as any).investorChart = new Chart(canvas, {
+    type: 'pie',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Investor Shares',
+        data: values,
+        backgroundColor: colors,
+        borderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: {
+          position: 'right',
+          labels: {
+            font: {
+              size: 12
+            }
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const label = ctx.label || '';
+              const value = ctx.raw as number;
+              const total = values.reduce((a, b) => a + b, 0);
+              const percentage = ((value / total) * 100).toFixed(1);
+              return `${label}: ${value.toLocaleString()} (${percentage}%)`;
+            }
+          }
         }
       }
-    });
-  }
+    }
+  });
+}
 
   // rendering tabs content zone
   export async function renderStakeGrowthChart(transactions: any[]) {

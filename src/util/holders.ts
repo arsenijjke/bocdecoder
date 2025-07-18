@@ -1,98 +1,89 @@
-type Holder = {
-    address: string;
-    balance: number;
-  };
-  
-  function truncateAddress(address: string): string {
-    return `${address.slice(0, 5)}...${address.slice(-4)}`;
-  }
-  
-  export async function fetchJettonHolders(masterAddress: string): Promise<Holder[]> {
-    const url = `https://testnet.tonapi.io/v2/jettons/${masterAddress}/holders?limit=100`;
-  
-    try {
-      const response = await fetch(url);
-      const json = await response.json();
-  
-      if (!json.holders || !Array.isArray(json.holders)) {
-        throw new Error('Invalid holders response');
-      }
-  
-      return json.holders.map((holder: any) => {
-        const address = holder.owner?.address || holder.address || null;
-        const rawBalance = holder.balance ?? holder.jetton_balance ?? null;
-  
-        if (!address || rawBalance === null) {
-          throw new Error('Missing holder address or balance');
-        }
-  
-        return {
-          address,
-          balance: Number(rawBalance) / 1e9, // convert from nano if needed
-        };
-      });
-    } catch (e) {
-      console.error('Failed to fetch jetton holders:', e);
-      throw e;
-    }
-  }
-  
-  function calculateSharePercentages(holders: Holder[]): { address: string; percentage: number }[] {
-    const total = holders.reduce((sum, h) => sum + h.balance, 0);
-  
-    return holders.map(h => ({
-      address: h.address,
-      percentage: (h.balance / total) * 100,
-    }));
-  }
-  
-  function updateTreasuryCard(
-    masterAddress: string,
-    shares: { address: string; percentage: number }[],
-    recentTx?: string
-  ) {
-    const card = document.querySelector('.card');
-    if (!card) return;
-  
-    // Update the first <p> (master address)
-    const addrP = card.querySelector('p');
-    if (addrP) {
-      addrP.textContent = truncateAddress(masterAddress);
-    }
-  
-    // Update the table rows dynamically:
-    const table = card.querySelector('table.owners-list');
-    if (table) {
-      table.innerHTML = ''; // Clear existing rows
-  
-      shares.forEach(({ address, percentage }) => {
-        const row = document.createElement('tr');
-  
-        const addrTd = document.createElement('td');
-        addrTd.textContent = truncateAddress(address);
-  
-        const percentTd = document.createElement('td');
-        percentTd.textContent = `${percentage.toFixed(1)}%`;
-  
-        row.appendChild(addrTd);
-        row.appendChild(percentTd);
-        table.appendChild(row);
-      });
-    }
-  
-    // Update the second <p> (recent transactions)
-    const pTags = card.querySelectorAll('p');
-    if (pTags.length > 1) {
-      pTags[1].textContent = recentTx || 'No recent transactions';
-    }
+interface Transaction {
+  in_msg: {
+    source: string | null;
+    destination: string | null;
+    value: string; // in nanoTON
+  } | null;
+  utime: number;
+  hash: string;
+}
+
+export function renderSentTransactions(transactions: Transaction[], contractAddress: string) {
+  const table = document.querySelector('.owners-list') as HTMLTableElement;
+  const emptyMsg = document.querySelector('.card p:nth-of-type(2)') as HTMLElement;
+
+  if (!table || !emptyMsg) {
+    console.warn('Table or message paragraph not found');
+    return;
   }
 
-  export async function loadTreasuryData(masterAddress: string) {
-    try {
-      const holders = await fetchJettonHolders(masterAddress);
-      const shares = calculateSharePercentages(holders);
-      updateTreasuryCard(masterAddress, shares, "Claim 0 →");
-    } catch (e) {
-      console.error('Error loading treasury data:', e);
-    }
+  // Clear any existing rows
+  table.innerHTML = '';
+
+  // Add table headers
+  const headerRow = document.createElement('tr');
+  headerRow.innerHTML = `
+    <th>Date</th>
+    <th>To</th>
+    <th>Amount (TON)</th>
+    <th>Tx Hash</th>
+  `;
+  table.appendChild(headerRow);
+
+  // Filter for outgoing transactions
+  const sentTxs = transactions.filter(tx => {
+    const source = getAddressField(tx.in_msg?.source);
+    const destination = getAddressField(tx.in_msg?.destination);
+  
+    const isSourceValid = typeof source === 'string';
+    const isDestinationValid = typeof destination === 'string';
+  
+    const isSent = isSourceValid &&
+                   isDestinationValid &&
+                   source.toLowerCase() === contractAddress.toLowerCase() &&
+                   destination.toLowerCase() !== contractAddress.toLowerCase();
+  
+    console.log(`[Tx]:`, {
+      hash: tx.hash,
+      source,
+      destination,
+      value: tx.in_msg?.value,
+      isSent,
+    });
+  
+    return isSent;
+  });
+  
+
+  if (sentTxs.length === 0) {
+    console.info('No sent transactions found from contract:', contractAddress);
+    emptyMsg.textContent = 'No recent transactions were made';
+    return;
   }
+
+  // Clear empty message
+  emptyMsg.textContent = '';
+
+  for (const tx of sentTxs) {
+    const row = document.createElement('tr');
+    const date = new Date(tx.utime * 1000).toLocaleString();
+    const dest = tx.in_msg!.destination!;
+    const amountTon = (parseFloat(tx.in_msg!.value) / 1e9).toFixed(3);
+    const hashShort = tx.hash.slice(0, 8) + '…';
+
+    row.innerHTML = `
+      <td>${date}</td>
+      <td>${dest}</td>
+      <td>${amountTon}</td>
+      <td><a href="https://testnet.tonscan.org/tx/${tx.hash}" target="_blank">${hashShort}</a></td>
+    `;
+    table.appendChild(row);
+  }
+}
+
+function getAddressField(input: any): string | undefined {
+  if (!input) return undefined;
+  if (typeof input === 'string') return input;
+  if (typeof input === 'object' && typeof input.address === 'string') return input.address;
+  return undefined;
+}

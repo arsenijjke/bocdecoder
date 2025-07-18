@@ -1,10 +1,11 @@
 import { TonClient, Cell, Address, Dictionary, Slice } from "@ton/ton";
 import { displayJettonDistribution } from './util/distribution_growth.ts';
-import { renderPieChart, renderStakeGrowthChart, renderUnclaimedChart } from './chart.ts'
+import { renderPieChart, renderUnclaimedChart } from './util/chart.ts'
 import { createCollapsibleResult, renderInvestorTable } from './util/parseBoc.ts';
 import { getAccountDataBoc, getAccountInfoREST, getInvestorInfoData } from './util/request.ts';
-import { loadTreasuryData } from './util/holders.ts';
+import { renderSentTransactions } from './util/holders.ts';
 import { updateValues } from './util/fiat.ts';
+import { setupTabs, fetchTransactions } from './util/tab.ts';
 
 const TON_ENDPOINT =
   "https://testnet.toncenter.com/api/v2/jsonRPC?api_key=4b3188a7c67ca35e532bc09763b9e6f1434a105f9e019ea8c9e7e74a4fafad68";
@@ -37,49 +38,19 @@ window.addEventListener('DOMContentLoaded', async () => {
   onAutoDecodeBtnClick(globalAddress);
   const jettonMaster = await fetchJettonMasterAddress(globalAddress);
   displayJettonDistribution(jettonMaster);
-  renderUnclaimedChart(jettonMaster);
-  loadTreasuryData(jettonMaster);
+  renderUnclaimedChart(jettonMaster, tonClient);
 
   fetchTonPrice();
   setValuesAndUpdate();
-  //updateFundSummary(jettonMaster);
-  //setInterval(() => updateFundSummary(jettonMaster), 60_000);
 
   try {
     const transactions = await fetchTransactions(globalAddress, 50);
     setupTabs(transactions); // See below
+    renderSentTransactions(transactions, jettonMaster);
   } catch (err) {
     console.error("Error setting up tabs:", err);
   }
 });
-
-function setupTabs(transactions: any[]) {
-  const tabs = document.querySelectorAll('.tabs > div');
-  const contents = document.querySelectorAll('.tab-content');
-
-  tabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      tabs.forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-
-      const target = tab.getAttribute('data-tab');
-      contents.forEach(content => {
-        if (content.id === target) {
-          content.classList.add('active');
-          if (target === 'stake') {
-            renderStakeGrowthChart(transactions);
-          } else if (target === 'calls') {
-            renderContractCalls(transactions);
-          } else if (target === 'payout') {
-            renderPayoutHistory(transactions);
-          }
-        } else {
-          content.classList.remove('active');
-        }
-      });
-    });
-  });
-}
 
 async function fetchTonPrice() {
   try {
@@ -153,6 +124,7 @@ async function onAutoDecodeBtnClick(address: string) {
     renderInvestorTable(cell.toBoc());
 
     const shareData = extractInvestorShares(cell.toBoc());
+    
     renderPieChart(shareData);
 
   } catch (e) {
@@ -225,167 +197,6 @@ async function setupCheckStatusREST() {
   const { status, balance } = await getAccountInfoREST(globalAddress);
   statusDisplay.textContent = `${status}${balance !== null ? ` (Balance: ${balance} TON)` : ''}`;
   updateValues(balance!);
-}
-
-export async function fetchTransactions(address: string, limit = 100) {
-  const url = `https://testnet.tonapi.io/v2/blockchain/accounts/${address}/transactions?limit=${limit}`;
-  
-  try {
-    const response = await fetch(url);
-    const json = await response.json();
-
-    // ✅ Corrected structure check
-    if (!json.transactions || !Array.isArray(json.transactions)) {
-      console.error('Unexpected response structure:', json);
-      throw new Error(`Failed to fetch transactions: Unexpected response format`);
-    }
-
-    return json.transactions;
-  } catch (e) {
-    console.error('Fetch error:', e);
-
-    if (e instanceof Error) {
-      throw new Error(`Failed to fetch transactions: ${e.message}`);
-    } else {
-      throw new Error(`Failed to fetch transactions: ${String(e)}`);
-    }
-  }
-}
-
-export function fetchStakeGrowthFromToncenter(transactions: any[]) {
-  const stakePoints = [];
-  let totalShares = 0;
-
-  for (const tx of transactions.slice().reverse()) {
-    const inMsg = tx.in_msg;
-    if (inMsg && inMsg.value && inMsg.source) {
-      const tonAmount = Number(inMsg.value) / 1e9;
-      const sharesAdded = tonAmount * 100; // Adjust logic if needed
-      totalShares += sharesAdded;
-
-      stakePoints.push({
-        date: new Date(tx.utime * 1000).toISOString().split('T')[0],
-        totalShares: Math.floor(totalShares),
-      });
-    }
-  }
-
-  return stakePoints;
-}
-
-// Contract calls tab
-
-export async function fetchContractCalls(txs: any[]) {
-  const calls = [];
-
-  for (const tx of txs) {
-    // Adjust the path here
-    const msg = tx.in_msg || tx.inMessage || tx.inMessageInfo;
-
-    if (!msg) continue;                        // no inbound message
-
-    const date  = new Date(tx.utime * 1000).toLocaleDateString();
-
-    // Deal with source possibly being an object
-    const src   = msg.source || msg.from || msg.src;
-    const source = typeof src === 'string'
-      ? src
-      : src?.address || JSON.stringify(src);
-
-    const value = Number(msg.value ?? msg.amount ?? 0) / 1e9;
-
-    /* ------- decode body text, adjust field names ------- */
-    const body  = msg.msg_data || msg.body || msg.data;
-    let decodedBody = '';
-
-    if (typeof body === 'string') {
-      decodedBody = body;
-    } else if (body?.text) {
-      decodedBody = body.text;
-    } else if (body?.decrypted_text) {
-      decodedBody = body.decrypted_text;
-    } else if (body?.type === 'raw') {
-      decodedBody = '[Raw message]';
-    } else if (body?.type) {
-      decodedBody = `[${body.type}]`;
-    } else {
-      decodedBody = '[unknown]';
-    }
-
-    calls.push({ date, source, value, decodedBody });
-  }
-
-  console.log("✅ extracted", calls.length, "contract calls");
-  return calls;
-}
-
-export async function renderContractCalls(transactions: any[]) {
-  const data = await fetchContractCalls(transactions);
-  const tableBody = document.querySelector('#contractCallsTable tbody');
-  if (!tableBody) {
-    console.warn('Contract calls table not found in DOM.');
-    return;
-  }
-
-  tableBody.innerHTML = '';
-
-  data.forEach(call => {
-    const row = document.createElement('tr');
-    row.innerHTML = `
-      <td>${call.date}</td>
-      <td>${call.source}</td>
-      <td>${call.value.toFixed(2)}</td>
-      <td>${call.decodedBody}</td>
-    `;
-    tableBody.appendChild(row);
-  });
-}
-
-// Payout Tab
-
-export async function fetchPayoutHistory(transactions: any[]) {
-  const payouts = [];
-
-  for (const tx of transactions) {
-    if (tx.out_msgs && tx.out_msgs.length > 0) {
-      for (const out of tx.out_msgs) {
-        if (out.destination && out.value > 0) {
-          const date = new Date(tx.utime * 1000).toLocaleDateString();
-          const destination = out.destination;
-          const value = Number(out.value) / 1e9;
-
-          payouts.push({
-            date,
-            destination,
-            value,
-          });
-        }
-      }
-    }
-  }
-
-  return payouts;
-}
-
-export async function renderPayoutHistory(transactions: any[]) {
-  const data = await fetchPayoutHistory(transactions);
-  const tableBody = document.querySelector('#payoutHistoryTable tbody');
-  if (!tableBody) {
-    console.warn('Payout table not found in DOM.');
-    return;
-  }
-
-  tableBody.innerHTML = '';
-
-  data.forEach(payout => {
-    const row = document.createElement('tr');
-    row.innerHTML = `
-      <td>${payout.date}</td>
-      <td>${payout.destination.address}</td>
-      <td>${payout.value.toFixed(2)}</td>
-    `;
-    tableBody.appendChild(row);
-  });
 }
 
 async function fetchJettonMasterAddress(address: string): Promise<string> {
