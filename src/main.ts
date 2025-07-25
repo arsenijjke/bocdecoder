@@ -2,7 +2,7 @@ import { TonClient, Cell, Address, Dictionary, Slice } from "@ton/ton";
 import { displayJettonDistribution } from './util/distribution_growth.ts';
 import { renderPieChart, renderUnclaimedChart } from './util/chart.ts'
 import { createCollapsibleResult, renderInvestorTable } from './util/parseBoc.ts';
-import { getAccountDataBoc, getAccountInfoREST, getInvestorInfoData } from './util/request.ts';
+import { getAccountDataBoc, getAccountInfoREST, getInvestorInfoData, fetchWalletJettons, fetchTokenPrices } from './util/request.ts';
 import { renderSentTransactions } from './util/holders.ts';
 import { updateValues } from './util/fiat.ts';
 import { setupTabs, fetchTransactions } from './util/tab.ts';
@@ -42,7 +42,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   fetchTonPrice();
   setValuesAndUpdate();
-
+  
   try {
     const transactions = await fetchTransactions(globalAddress, 50);
     setupTabs(transactions); // See below
@@ -260,6 +260,100 @@ async function setValuesAndUpdate(): Promise<void> {
 document.getElementById("processWalletBtn")!.onclick = () => {
   getWalletInfo();
 };
+
+export async function fetchWalletTonBalance(address: string): Promise<number> {
+  const { balance } = await getAccountInfoREST(address);
+  return balance ?? 0; // return 0 if null
+}
+
+export const supportedCoins: Record<string, string> = {
+  USDT: "tether",
+  BTC: "bitcoin",
+  ETH: "ethereum",
+  // ...
+};
+
+function extractNumberFromText(text: string): number {
+  const match = text.match(/(\d+(\.\d+)?)/); // First number in string
+  return match ? parseFloat(match[0]) : 0;
+}
+
+export async function showWalletJettons(walletAddress: string) {
+  const jettons = await fetchWalletJettons(walletAddress);
+  const tonBalance = await fetchWalletTonBalance(walletAddress); // number
+  const prices = await fetchTokenPrices(); // Contains BTC, ETH, USDT, etc.
+
+  // ✅ Inject TON price from DOM
+  const tonRateText = document.getElementById("tonRate")?.textContent || "";
+  const tonPrice = extractNumberFromText(tonRateText);
+  prices["TON"] = tonPrice;
+  console.log("TON rate text:", tonRateText, "→ parsed TON price:", tonPrice);
+  const table = document.querySelector("#jettonTable tbody")!;
+  table.innerHTML = "";
+
+  let totalUSD = 0;
+
+  // 1️⃣ Add TON row
+  const tonUSD = tonBalance * tonPrice;
+  totalUSD += tonUSD;
+
+  const tonRow = document.createElement("tr");
+  tonRow.innerHTML = `
+    <td>TON</td>
+    <td>Toncoin</td>
+    <td>${tonBalance.toFixed(4)}</td>
+    <td>$${tonUSD.toFixed(2)}</td>
+  `;
+  table.appendChild(tonRow);
+
+  // 2️⃣ Filter jettons and render
+  const filtered = jettons.filter(j =>
+    j.symbol.toUpperCase() !== 'TON' && supportedCoins[j.symbol.toUpperCase()]
+  );
+
+  if (filtered.length === 0) {
+    const row = document.createElement("tr");
+    row.innerHTML = `<td colspan="4">No popular tokens found</td>`;
+    table.appendChild(row);
+  }
+
+  for (const j of filtered) {
+    const symbol = j.symbol.toUpperCase();
+    const price = prices[symbol] ?? 0;
+    const usdValue = j.amount * price;
+    totalUSD += usdValue;
+
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${symbol}</td>
+      <td>${j.name}</td>
+      <td>${j.amount.toFixed(4)}</td>
+      <td>$${usdValue.toFixed(2)}</td>
+    `;
+    table.appendChild(row);
+  }
+
+  // 3️⃣ Append final row with total
+  const totalRow = document.createElement("tr");
+  totalRow.innerHTML = `
+    <td colspan="3" style="font-weight:bold; text-align:right">Total USD Value:</td>
+    <td style="font-weight:bold">$${totalUSD.toFixed(2)}</td>
+  `;
+  table.appendChild(totalRow);
+}
+
+export function attachWalletLinkHandlers() {
+  document.querySelectorAll(".wallet-link").forEach(link => {
+    link.addEventListener("click", (event) => {
+      event.preventDefault();
+
+      const address = (event.currentTarget as HTMLElement).getAttribute("data-address");
+      if (address) {
+        showWalletJettons(address);
+      }
+    });
+  });
+}
 
 async function getWalletInfo() {
   const treasuryAddressRaw = globalAddress

@@ -93,3 +93,73 @@ export async function getAccountDataBoc(address: string, client: TonClient) {
       share
     };
   }
+
+  type JettonBalance = {
+    symbol: string;
+    amount: number;
+    address: string;
+    name: string;
+    image: string;
+  };
+  
+  export async function fetchWalletJettons(walletAddress: string): Promise<JettonBalance[]> {
+    if (!walletAddress || walletAddress.length < 40) {
+      throw new Error('Invalid wallet address');
+    }
+  
+    const url = `https://testnet.tonapi.io/v2/accounts/${walletAddress}/jettons`;
+    console.log('Fetching Jetton balances from:', url);
+  
+    const response = await fetch(url);
+  
+    if (!response.ok) {
+      const text = await response.text();
+      console.error('API error:', response.status, text);
+      throw new Error(`Failed to fetch jettons: ${response.status}`);
+    }
+  
+    const data = await response.json();
+  
+    const jettons: JettonBalance[] = (data.balances || []).map((item: any) => {
+      const jetton = item.jetton || {};
+      const decimals = jetton.decimals ?? 9;
+  
+      return {
+        symbol: jetton.symbol ?? 'UNKNOWN',
+        amount: item.balance / Math.pow(10, decimals),
+        address: jetton.address ?? '',
+        name: jetton.name ?? 'Unknown Token',
+        image: jetton.image ?? '',
+      };
+    });
+  
+    return jettons;
+  }
+
+  export const supportedCoins: Record<string, string> = {
+    USDT: "tether",
+    BTC: "bitcoin",
+    ETH: "ethereum",
+    BNB: "binancecoin",
+    SOL: "solana",
+    XRP: "ripple",
+    DOGE: "dogecoin",
+    ADA: "cardano",
+    // Add more if needed
+  };
+
+  export async function fetchTokenPrices(): Promise<Record<string, number>> {
+  const coinIds = Object.values(supportedCoins).join(",");
+  const url = `https://api.coingecko.com/api/v3/simple/price?ids=${coinIds}&vs_currencies=usd`;
+
+  const response = await fetch(url);
+  const data = await response.json();
+
+  // Map back from CoinGecko ID to symbol (TON, BTC, etc.)
+  const prices: Record<string, number> = {};
+  for (const [symbol, id] of Object.entries(supportedCoins)) {
+    prices[symbol] = data[id]?.usd ?? 0;
+  }
+
+  return prices;
+}

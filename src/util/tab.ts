@@ -140,7 +140,50 @@ export async function fetchTransactions(address: string, limit = 100) {
       `;
       tableBody.appendChild(row);
     });
+  
+    makeContractCallsTableSortable(); // 👈 Add this here
   }
+
+  export function makeContractCallsTableSortable() {
+    document.querySelectorAll("#contractCallsTable th.sortable").forEach(header => {
+      header.addEventListener("click", () => {
+        const table = header.closest("table");
+        const tbody = table?.querySelector("tbody");
+        const columnIndex = parseInt(header.getAttribute("data-column") || "0");
+        const type = header.getAttribute("data-type") || "string";
+        const rows = Array.from(tbody?.querySelectorAll("tr") || []);
+  
+        const isCurrentlyAsc = header.classList.contains("asc");
+        const isCurrentlyDesc = header.classList.contains("desc");
+        const isAsc = !isCurrentlyAsc || isCurrentlyDesc;
+  
+        rows.sort((a, b) => {
+          let aText = a.children[columnIndex].textContent || "";
+          let bText = b.children[columnIndex].textContent || "";
+  
+          let aVal: number | string = aText;
+          let bVal: number | string = bText;
+  
+          if (type === "number") {
+            aVal = parseFloat(aText) || 0;
+            bVal = parseFloat(bText) || 0;
+          } else if (type === "date") {
+            aVal = new Date(aText).getTime();
+            bVal = new Date(bText).getTime();
+          }
+  
+          return isAsc ? (aVal > bVal ? 1 : -1) : (aVal < bVal ? 1 : -1);
+        });
+  
+        // Clear previous sort state
+        document.querySelectorAll("#contractCallsTable th.sortable").forEach(h => h.classList.remove("asc", "desc"));
+        header.classList.add(isAsc ? "asc" : "desc");
+  
+        rows.forEach(row => tbody?.appendChild(row));
+      });
+    });
+  }
+  
   
   // Payout Tab
   

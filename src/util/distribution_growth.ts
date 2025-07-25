@@ -82,7 +82,6 @@ export async function fetchJettonHolders(masterAddress: string): Promise<Holder[
 
   /* 5️⃣  normal happy‑path                                             */
   const json = await response.json();
-  console.log("Raw JSON response:", json);
 
   if (!Array.isArray(json.addresses)) {
     const msg = json.error ?? "Invalid response structure";

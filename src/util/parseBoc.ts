@@ -1,4 +1,5 @@
 import { Cell, Address, Dictionary, Slice } from "@ton/ton";
+import { attachWalletLinkHandlers } from '../main.ts';
 
 // Parse the BOC of the dictionary of investors and render a HTML table
 export function parseBoc2(buffer: Buffer): string {
@@ -53,8 +54,19 @@ export function parseBoc2(buffer: Buffer): string {
     return "<p><em>No investors found in dictionary cells</em></p>";
   }
 
-  let html = '<table border="1" cellspacing="0" cellpadding="4">';
-  html += "<tr><th>#</th><th>Address</th><th>Shares</th><th>Pending Jettons</th></tr>";
+  let html = `
+<div style="max-height: 400px; overflow-y: auto; border: 1px solid #ccc; width: 100%;">
+  <table id="investor-table" border="1" cellspacing="0" cellpadding="4" style="width: 100%; border-collapse: collapse;">
+    <thead>
+  <tr>
+    <th>#</th>
+    <th>Address</th>
+    <th class="sortable" data-column="2">Shares</th>
+    <th class="sortable" data-column="3">Pending Jettons</th>
+  </tr>
+</thead>
+    <tbody>
+`;
 
   let totalShares = 0;
   let totalPendingJettons = 0;
@@ -65,7 +77,7 @@ export function parseBoc2(buffer: Buffer): string {
 
     html += `<tr>
       <td>${idx + 1}</td>
-      <td>${addr.toString()}</td>
+      <td><a href="#" class="wallet-link" data-address="${addr.toString()}">${addr.toString()}</a></td>
       <td>${share.toString()}</td>
       <td>${pendingJettons.toString()}</td>
     </tr>`;
@@ -77,7 +89,12 @@ export function parseBoc2(buffer: Buffer): string {
     <td>${totalShares.toString()}</td>
     <td>${totalPendingJettons.toString()}</td>
   </tr>`;
-  html += "</table>";
+
+  html += `
+    </tbody>
+  </table>
+</div>
+`;
 
   return html;
 }
@@ -106,5 +123,39 @@ export async function renderInvestorTable(buffer: Buffer) {
   const container = document.getElementById("investorTableContainer");
   if (container) {
     container.innerHTML = html;
+    attachWalletLinkHandlers();
+    makeTableSortable(); // 👈 Add this line
   }
 }
+
+export function makeTableSortable() {
+  document.querySelectorAll("th.sortable").forEach(header => {
+    header.addEventListener("click", () => {
+      const table = header.closest("table");
+      const tbody = table?.querySelector("tbody");
+      const columnIndex = parseInt(header.getAttribute("data-column") || "0");
+      const rows = Array.from(tbody?.querySelectorAll("tr") || []);
+
+      const isAsc = header.classList.contains("asc");
+
+      // Sort rows by numeric value in the given column
+      rows.sort((a, b) => {
+        const aText = a.children[columnIndex].textContent || "0";
+        const bText = b.children[columnIndex].textContent || "0";
+        const aNum = parseInt(aText.replace(/[^0-9]/g, ""), 10) || 0;
+        const bNum = parseInt(bText.replace(/[^0-9]/g, ""), 10) || 0;
+
+        return isAsc ? aNum - bNum : bNum - aNum;
+      });
+
+      // Toggle sort direction class
+      document.querySelectorAll("th.sortable").forEach(h => h.classList.remove("asc", "desc"));
+      header.classList.add(isAsc ? "desc" : "asc");
+
+      // Reattach sorted rows
+      rows.forEach(row => tbody?.appendChild(row));
+    });
+  });
+}
+
+

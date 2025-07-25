@@ -43,14 +43,6 @@ export function renderSentTransactions(transactions: Transaction[], contractAddr
                    source.toLowerCase() === contractAddress.toLowerCase() &&
                    destination.toLowerCase() !== contractAddress.toLowerCase();
   
-    console.log(`[Tx]:`, {
-      hash: tx.hash,
-      source,
-      destination,
-      value: tx.in_msg?.value,
-      isSent,
-    });
-  
     return isSent;
   });
   
