@@ -91,6 +91,17 @@
       margin-top: 10px;
       font-size: 14px;
     }
+    th.sortable {
+  cursor: pointer;
+}
+
+th.sortable.asc::after {
+  content: " ▲";
+}
+
+th.sortable.desc::after {
+  content: " ▼";
+}
     th, td {
       border: 1px solid #ddd;
       padding: 8px;
@@ -100,7 +111,7 @@
       text-align: right;
     }
   </style>
-  <script type="module" crossorigin src="/bocdecoder/assets/start-nnUYCQZy.js"></script>
+  <script type="module" crossorigin src="/bocdecoder/assets/start-aZiwyWFN.js"></script>
   <link rel="modulepreload" crossorigin href="/bocdecoder/assets/modulepreload-polyfill-B5Qt9EMX.js">
 </head>
 <body>
@@ -200,9 +211,9 @@
             <table id="contractCallsTable">
               <thead>
                 <tr>
-                  <th>Date</th>
+                  <th class="sortable" data-column="0" data-type="date">Date</th>
                   <th>Sender</th>
-                  <th>Value (TON)</th>
+                  <th class="sortable" data-column="2" data-type="number">Value (TON)</th>
                   <th>Message</th>
                 </tr>
               </thead>
@@ -216,6 +227,17 @@
           <div class="card" id="investorTableContainer">
             
           </div>
+          <table id="jettonTable">
+            <thead>
+              <tr>
+                <th>Symbol</th>
+                <th>Name</th>
+                <th>Amount</th>
+                <th>USD</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
         </div>
     
       </div>
@@ -261,9 +283,7 @@
           <canvas id="profitPieChart" width="100" height="100" style="margin-top: 20px;"></canvas>
         </div>
       </div>
-    
     </div>
-
   </section>
 
   <!-- Scripts -->
